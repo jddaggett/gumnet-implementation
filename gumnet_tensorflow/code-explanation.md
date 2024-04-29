@@ -27,8 +27,13 @@ Defines the Gum-Net model architecture using TensorFlow and Keras. The model inv
 
 - train_demo.py:
 This script demonstrates how to train the Gum-Net model. It includes loading data, initializing or loading a model, normalizing data, and running a training loop to fine-tune the model with evaluation before and after training.
+
 - opt.py:
 Contains the script for parsing command-line options for the demo, including paths to data and model, and settings like whether to build a new model or use a pretrained one, and the initial learning rate.
 
 - utils.py:
 Provides utility functions like calculating initial weights for the network, defining a custom loss function based on correlation coefficients, and evaluating alignment errors.
+
+
+## Gum_net.py
+
