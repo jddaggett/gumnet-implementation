@@ -7,13 +7,12 @@ from keras.layers.normalization import BatchNormalization
 import keras.backend as K
 
 from aitom.align.deep.gum.utils import get_initial_weights, correlation_coefficient_loss, alignment_eval
-
 from aitom.align.deep.gum.FeatureCorrelation import FeatureCorrelation
 from aitom.align.deep.gum.FeatureL2Norm import FeatureL2Norm
 from aitom.align.deep.gum.RigidTransformation3DImputation import RigidTransformation3DImputation
 from aitom.align.deep.gum.SpectralPooling import SpectralPooling
 
-
+# define Gumnet model structure
 def GUM(img_shape=None):
     if img_shape is None:
         img_shape = [32, 32, 32]
