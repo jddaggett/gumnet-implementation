@@ -9,18 +9,24 @@ class SpectralPooling(Layer):
     """
     Performs spectral pooling and filtering using DCT as a keras layer
     """
+    # `output_size` defines the size of the output, `truncation` is used to truncate the high-frequency part of the spectrum, `homomorphic` is a Boolean value that determines whether to apply logarithms on the spectrum Transform.
 
     def __init__(self, output_size, truncation, homomorphic=False, **kwargs):
         self.output_size = output_size
         self.truncation = truncation
         self.homomorphic = homomorphic
         super(SpectralPooling, self).__init__(**kwargs)
-
+ 
+    # Calculate and return the output shape based on the input shape.
     def compute_output_shape(self, input_shapes):
         length, height, width = self.output_size
         num_channels = input_shapes[-1]
         return None, length, height, width, num_channels
-
+    
+    """
+    If homomorphic is enabled, a logarithmic transformation is first applied to the tensor. These lines perform a 3D discrete cosine transform (DCT), crop the transformed tensor to remove unwanted high-frequency parts, and then perform an inverse DCT transform. If homomorphic is true, an exponential transformation is also applied to the inverse transformed result.
+    """
+    
     def call(self, tensors, mask=None):
         if self.homomorphic:
             tensors = K.log(tensors)

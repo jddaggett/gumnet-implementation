@@ -28,7 +28,11 @@ def GUM(img_shape=None):
 
     # feature extraction for s_b
     main_input = Input(shape=input_shape, name='main_input')
-
+    # shared convolutional layer
+    # ReLU activation function is used to add nonlinearity
+    # Batch Normalization is applied to help the model training be more stable
+    # Spectral pooling: reference to models/layers/SpectralPooling.py
+    # FeatureL2Norm: reference to models/layers/FeatureL2Norm.py
     v_a = shared_conv1(main_input)
     v_a = Activation('relu')(v_a)
     v_a = BatchNormalization(axis=channel_axis)(v_a)
@@ -54,6 +58,7 @@ def GUM(img_shape=None):
     v_a = FeatureL2Norm()(v_a)
 
     # feature extraction for s_a
+    # Defines the auxiliary input to the model, which is used to process the second sub-image.
     auxiliary_input = Input(shape=input_shape, name='aux_input')
 
     v_b = shared_conv1(auxiliary_input)
