@@ -18,7 +18,7 @@ class SpectralPooling(nn.Module):
         if self.homomorphic:
             x = torch.log(x + 1e-6)  # Adding a small constant to prevent log(0)
 
-        # Perform the 3D DCT, cropping, and then the 3D inverse DCT
+        # Perform the 3D DCT, cropping, and then the 3D inverse DCT, DCT
         x_dct = self._dct3D(x)
         x_crop = self._cropping3D(x_dct)
         x_idct = self._idct3D(x_crop)
