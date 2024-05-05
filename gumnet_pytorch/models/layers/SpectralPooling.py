@@ -14,8 +14,7 @@ class SpectralPooling(nn.Module):
         self.homomorphic = homomorphic  # If True, apply logarithmic and exponential transformations
 
     def forward(self, x):
-        # Apply logarithmic transformation if homomorphic processing is enabled xx
-        # hgg
+        # Apply logarithmic transformation if homomorphic processing is enabled.
         if self.homomorphic:
             x = torch.log(x + 1e-6)  # Adding a small constant to prevent log(0)
 
