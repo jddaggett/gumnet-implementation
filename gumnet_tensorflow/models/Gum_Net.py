@@ -87,7 +87,7 @@ def GUM(img_shape=None):
 
     # correlation layer
     c_ab = FeatureCorrelation()([v_a, v_b])
-    c_ab = FeatureL2Norm()(c_ab)
+    c_ab = FeatureL2Norm()(c_a0b)
 
     # correlation layer
     c_ba = FeatureCorrelation()([v_b, v_a])
