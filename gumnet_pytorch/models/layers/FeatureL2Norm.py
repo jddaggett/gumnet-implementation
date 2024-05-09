@@ -4,7 +4,6 @@ import torch.nn.functional as F
 class FeatureL2Norm(nn.Module):
     """
     Normalizing features using l2 norm
-    Modified from https://github.com/jaehyunnn/cnngeometric_tensorflow
 
     References
     ----------

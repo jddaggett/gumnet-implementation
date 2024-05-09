@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 class FeatureCorrelation(nn.Module):
     """
-    Performs feature correlation as a PyTorch module.
     This layer computes the correlation between feature maps from two images.
     """
     def __init__(self):
