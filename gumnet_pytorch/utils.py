@@ -4,6 +4,7 @@ import math
 from scipy.ndimage import rotate
 from skimage.io import imsave
 from skimage import img_as_ubyte
+import matplotlib.pyplot as plt
 
 
 def get_initial_weights(output_size):
@@ -107,3 +108,46 @@ def rotation_matrix_axis(dim, theta):
         raise
 
     return rm
+
+
+def visualize(y_true, y_pred):
+    """
+    Visualizes a 2D slice from the reference subtomogram data (y_true) and the corresponding aligned subtomogram data (y_pred).
+
+    Parameters:
+    - y_true: Reference subtomogram data tensor with shape [100, 1, 32, 32, 32]
+    - y_pred: Corresponding aligned subtomogram data tensor obtained from GumNet results with shape [100, 1, 32, 32, 32]
+    """
+    # Arbitrarily select the first sample in the batch
+    y_true_sample = y_true[0].squeeze().numpy()
+    y_pred_sample = y_pred[0].squeeze().numpy()
+
+    # Arbitrarily select middle 2D slice along depth dimension
+    slice_index = y_true_sample.shape[0] // 2
+    y_true_slice = y_true_sample[slice_index, :, :]
+    y_pred_slice = y_pred_sample[slice_index, :, :]
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.imshow(y_true_slice, cmap='gray')
+    plt.title('Ground Truth Slice')
+    plt.axis('off')
+    plt.subplot(1, 2, 2)
+    plt.imshow(y_pred_slice, cmap='gray')
+    plt.title('Predicted Slice')
+    plt.axis('off')
+
+    plt.show()
+
+
+# the below code is an attempt to load data as mrc files for visualization with ChimeraX
+import mrcfile
+def save_as_mrc(tensor, filename):
+    with mrcfile.new(filename, overwrite=True) as mrc:
+        mrc.set_data(tensor.astype(np.float32))
+
+def get_mrc_files(y_true, y_pred):
+    y_true_sample = y_true[0].squeeze().numpy()
+    y_pred_sample = y_pred[0].squeeze().numpy()
+    save_as_mrc(y_true_sample, 'y_true_sample.mrc')
+    save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')

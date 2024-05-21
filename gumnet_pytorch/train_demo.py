@@ -59,39 +59,45 @@ def main(opt):
     
     # 3. Evaluate before fine-tuning
     transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask)
-    print('Output shape:', transformation_output.shape)
+    print('transformation output shape:', transformation_output.shape)
+    print('parameters shape:', y_pred.shape)
     print('Before finetuning:')
     alignment_eval(ground_truth, y_pred , x_test[0].shape[0])
+    x_tensor = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3)
 
-    for epoch in range(20):
-        print(f'Training Iteration {epoch + 1}')
-        optimizer.param_groups[0]['lr'] = opt.initial_lr * 0.9 ** epoch
+    print('plot 2D slices and save mrc files for 3D visualization')
+    visualize(x_tensor, transformation_output)
+    get_mrc_files(x_tensor, transformation_output)
 
-        for x_batch, y_batch, mask_1_batch, mask_2_batch in dataloader:
-            optimizer.zero_grad()
-            x_batch = torch.tensor(x_batch, dtype=torch.float32).permute(0, 4, 1, 2, 3)
-            y_batch = torch.tensor(y_batch, dtype=torch.float32).permute(0, 4, 1, 2, 3)
-            mask_1_batch = torch.tensor(mask_1_batch, dtype=torch.float32)
-            mask_2_batch = torch.tensor(mask_2_batch, dtype=torch.float32)
+    # for epoch in range(20):
+    #     print(f'Training Iteration {epoch + 1}')
+    #     optimizer.param_groups[0]['lr'] = opt.initial_lr * 0.9 ** epoch
 
-            x_batch.requires_grad = True
-            y_batch.requires_grad = True
+    #     for x_batch, y_batch, mask_1_batch, mask_2_batch in dataloader:
+    #         optimizer.zero_grad()
+    #         x_batch = torch.tensor(x_batch, dtype=torch.float32).permute(0, 4, 1, 2, 3)
+    #         y_batch = torch.tensor(y_batch, dtype=torch.float32).permute(0, 4, 1, 2, 3)
+    #         mask_1_batch = torch.tensor(mask_1_batch, dtype=torch.float32)
+    #         mask_2_batch = torch.tensor(mask_2_batch, dtype=torch.float32)
 
-            output, _ = model(x_batch, y_batch)
-            
-            if isinstance(output, list):
-                output = output[0]
+    #         x_batch.requires_grad = True
+    #         y_batch.requires_grad = True
 
-            loss = correlation_coefficient_loss(y_batch, output)
-            loss.backward()
-            optimizer.step()
+    #         output, _ = model(x_batch, y_batch)
 
-        print(f'Epoch {epoch + 1} complete. Loss: {loss.item()}')
+    #         if isinstance(output, list):
+    #             output = output[0]
 
-    # 4. Evaluate after fine-tuning
-    transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask)
-    print('After finetuning:')
-    alignment_eval(ground_truth, y_pred, x_test[0].shape[0])
+    #         loss = correlation_coefficient_loss(y_batch, output)
+    #         loss.backward()
+    #         optimizer.step()
+
+    #     print(f'Epoch {epoch + 1} complete. Loss: {loss.item()}')
+
+    # # 4. Evaluate after fine-tuning
+    # transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask)
+    # print('After finetuning:')
+    # alignment_eval(ground_truth, y_pred, x_test[0].shape[0])
 
 if __name__ == '__main__':
     class Opt:
