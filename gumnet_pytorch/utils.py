@@ -140,14 +140,18 @@ def visualize(y_true, y_pred):
     plt.show()
 
 
-# the below code is an attempt to load data as mrc files for visualization with ChimeraX
+# the below code loads subtomogram data as mrc files for 3D visualization with ChimeraX
 import mrcfile
 def save_as_mrc(tensor, filename):
     with mrcfile.new(filename, overwrite=True) as mrc:
         mrc.set_data(tensor.astype(np.float32))
 
 def get_mrc_files(y_true, y_pred):
-    y_true_sample = y_true[0].squeeze().numpy()
-    y_pred_sample = y_pred[0].squeeze().numpy()
-    save_as_mrc(y_true_sample, 'y_true_sample.mrc')
-    save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')
+    try:
+        y_true_sample = y_true[0].squeeze().numpy()
+        y_pred_sample = y_pred[0].squeeze().numpy()
+        save_as_mrc(y_true_sample, 'y_true_sample.mrc')
+        save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')
+        print('Generated 2 mrc files for visualization')
+    except:
+        print('Error saving mrc files for visualization. Is the mrcfile package installed?')

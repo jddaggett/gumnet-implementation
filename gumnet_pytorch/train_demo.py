@@ -51,7 +51,7 @@ def main(opt):
 
     # 2. Initialize model and optimizer
     model = GumNet()
-    print('GumNet model initialized!')
+    print('Gum-Net model initialized!')
     optimizer = optim.Adam(model.parameters(), lr=opt.initial_lr)
     for param in model.parameters():
         param.requires_grad = True
@@ -59,16 +59,15 @@ def main(opt):
     
     # 3. Evaluate before fine-tuning
     transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask)
-    print('transformation output shape:', transformation_output.shape)
-    print('parameters shape:', y_pred.shape)
-    print('Before finetuning:')
+    print('Before fine-tuning:')
     alignment_eval(ground_truth, y_pred , x_test[0].shape[0])
     x_tensor = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3)
 
-    print('plot 2D slices and save mrc files for 3D visualization')
+    # 4. Visualize results
     visualize(x_tensor, transformation_output)
     get_mrc_files(x_tensor, transformation_output)
 
+    # @TODO finish converting fine-tuning at a later time
     # for epoch in range(20):
     #     print(f'Training Iteration {epoch + 1}')
     #     optimizer.param_groups[0]['lr'] = opt.initial_lr * 0.9 ** epoch
@@ -94,9 +93,9 @@ def main(opt):
 
     #     print(f'Epoch {epoch + 1} complete. Loss: {loss.item()}')
 
-    # # 4. Evaluate after fine-tuning
+    # # 5. Evaluate after fine-tuning
     # transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask)
-    # print('After finetuning:')
+    # print('After fine-tuning:')
     # alignment_eval(ground_truth, y_pred, x_test[0].shape[0])
 
 if __name__ == '__main__':

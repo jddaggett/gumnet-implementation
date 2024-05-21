@@ -23,94 +23,79 @@ class GumNet(nn.Module):
         self.shared_conv4 = nn.Conv3d(128, 256, kernel_size=3, stride=1, padding=0)
         self.shared_conv5 = nn.Conv3d(256, 512, kernel_size=3, stride=1, padding=0)
 
+        # Define the batch normalization layers
         self.bn1 = nn.BatchNorm3d(32)
         self.bn2 = nn.BatchNorm3d(64)
         self.bn3 = nn.BatchNorm3d(128)
         self.bn4 = nn.BatchNorm3d(256)
         self.bn5 = nn.BatchNorm3d(512)
 
+        # Define the spectral pooling layers
+        self.spectral_pool1 = SpectralPooling((26, 26, 26), (22, 22, 22))
+        self.spectral_pool2 = SpectralPooling((18, 18, 18), (15, 15, 15))
+        self.spectral_pool3 = SpectralPooling((12, 12, 12), (10, 10, 10))
+        self.spectral_pool4 = SpectralPooling((8, 8, 8), (7, 7, 7))
+
         self.relu = nn.ReLU()
 
         # Fully connected layers
-        self.fc1 = nn.Linear(93312, 2000) # size obtained experimentally
+        self.fc1 = nn.Linear(93312, 2000) # input size obtained experimentally
         self.fc2 = nn.Linear(2000, 2000)
         self.fc3 = nn.Linear(2000, 6)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, sa, sb):
         # Process input through shared conv layers and apply spectral pooling
-        print("Input shape sa:", sa.shape)
         va = self.shared_conv1(sa)
-        print("After shared_conv1 va:", va.shape)
         va = self.bn1(va)
         va = self.relu(va)
-        va = SpectralPooling((26, 26, 26), (22, 22, 22))(va)
-        print("After spectral pooling va:", va.shape)
+        va = self.spectral_pool1(va)
 
         va = self.shared_conv2(va)
-        print("After shared_conv2 va:", va.shape)
         va = self.bn2(va)
         va = self.relu(va)
-        va = SpectralPooling((18, 18, 18), (15, 15, 15))(va)
-        print("After spectral pooling va:", va.shape)
+        va = self.spectral_pool2(va)
 
         va = self.shared_conv3(va)
-        print("After shared_conv3 va:", va.shape)
         va = self.bn3(va)
         va = self.relu(va)
-        va = SpectralPooling((12, 12, 12), (10, 10, 10))(va)
-        print("After spectral pooling va:", va.shape)
+        va = self.spectral_pool3(va)
 
         va = self.shared_conv4(va)
-        print("After shared_conv4 va:", va.shape)
         va = self.bn4(va)
         va = self.relu(va)
-        va = SpectralPooling((8, 8, 8), (7, 7, 7))(va)
-        print("After spectral pooling va:", va.shape)
+        va = self.spectral_pool4(va)
 
         va = self.shared_conv5(va)
-        print("After shared_conv5 va:", va.shape)
         va = self.bn5(va)
         va = self.relu(va)
         va = FeatureL2Norm()(va)
-        print("After FeatureL2Norm va:", va.shape)
 
         # Repeat for sb
-        print("Input shape sb:", sb.shape)
         vb = self.shared_conv1(sb)
-        print("After shared_conv1 vb:", vb.shape)
         vb = self.bn1(vb)
         vb = self.relu(vb)
-        vb = SpectralPooling((26, 26, 26), (22, 22, 22))(vb)
-        print("After spectral pooling vb:", vb.shape)
+        vb = self.spectral_pool1(vb)
 
         vb = self.shared_conv2(vb)
-        print("After shared_conv2 vb:", vb.shape)
         vb = self.bn2(vb)
         vb = self.relu(vb)
-        vb = SpectralPooling((18, 18, 18), (15, 15, 15))(vb)
-        print("After spectral pooling vb:", vb.shape)
+        vb = self.spectral_pool2(vb)
 
         vb = self.shared_conv3(vb)
-        print("After shared_conv3 vb:", vb.shape)
         vb = self.bn3(vb)
         vb = self.relu(vb)
-        vb = SpectralPooling((12, 12, 12), (10, 10, 10))(vb)
-        print("After spectral pooling vb:", vb.shape)
+        vb = self.spectral_pool3(vb)
 
         vb = self.shared_conv4(vb)
-        print("After shared_conv4 vb:", vb.shape)
         vb = self.bn4(vb)
         vb = self.relu(vb)
-        vb = SpectralPooling((8, 8, 8), (7, 7, 7))(vb)
-        print("After spectral pooling vb:", vb.shape)
+        vb = self.spectral_pool4(vb)
 
         vb = self.shared_conv5(vb)
-        print("After shared_conv5 vb:", vb.shape)
         vb = self.bn5(vb)
         vb = self.relu(vb)
         vb = FeatureL2Norm()(vb)
-        print("After FeatureL2Norm vb:", vb.shape)
 
         # Apply correlation and flatten for fully connected layers
         c_ab = FeatureCorrelation()(va, vb).view(va.size(0), -1)
@@ -128,10 +113,4 @@ class GumNet(nn.Module):
         # Apply transformation
         transformed, M1_t, M2_t = RigidTransformation3DImputation((32,32,32))(sa, sb, c)
 
-        return transformed, c
-
-# Example instantiation and forward pass
-# model = GumNet()
-# Define sa and sb according to your actual data shape and pass them through the model
-# sa, sb = torch.randn(...), torch.randn(...)
-# output = model(sa, sb)
+        return transformed, c # sb_hat and 6D transformation parameters

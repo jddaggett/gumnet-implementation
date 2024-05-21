@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from scipy.fftpack import dct, idct
+from scipy.fftpack import dct, idct # use scipy.fftpack instead of torch.fft
 
 class SpectralPooling(nn.Module):
     """
@@ -24,25 +24,22 @@ class SpectralPooling(nn.Module):
         return x_idct
 
     def _dct3D(self, x):
-        # Preserving channel dimension
         x = x.permute(0, 2, 3, 4, 1).contiguous()
         x = x.cpu().detach().numpy()
         x = dct(dct(dct(x, axis=0, norm='ortho'), axis=1, norm='ortho'), axis=2, norm='ortho')
         return torch.tensor(x).permute(0, 4, 1, 2, 3).contiguous()
 
     def _idct3D(self, x):
-        # Preserving channel dimension
         x = x.permute(0, 2, 3, 4, 1).contiguous()
         x = x.cpu().detach().numpy()
         x = idct(idct(idct(x, axis=0, norm='ortho'), axis=1, norm='ortho'), axis=2, norm='ortho')
         return torch.tensor(x).permute(0, 4, 1, 2, 3).contiguous()
 
     def _cropping3D(self, x):
-        # Preserve the number of channels
         x_trunc = x[:, :, :self.truncation[0], :self.truncation[1], :self.truncation[2]]
         pad = [0, self.output_size[2] - self.truncation[2],
                0, self.output_size[1] - self.truncation[1],
                0, self.output_size[0] - self.truncation[0],
-               0, 0]  # No padding for the batch and channel dimensions
+               0, 0]
         x_pad = F.pad(x_trunc, pad, "constant", 0)
         return x_pad
