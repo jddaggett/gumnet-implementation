@@ -17,18 +17,15 @@ def get_initial_weights(output_size):
 
 def correlation_coefficient_loss(y_true, y_pred):
     x = y_true
-    y = torch.tensor(y_pred).permute(0, 2, 3, 4, 1).contiguous()
-    mx = torch.mean(x)
-    my = torch.mean(y)
+    y = y_pred
+    mx = torch.mean(x, dim=(1, 2, 3, 4), keepdim=True)
+    my = torch.mean(y, dim=(1, 2, 3, 4), keepdim=True)
     xm, ym = x - mx, y - my
-    print("shape of xm", xm.shape)
-    print("shape of ym", ym.shape)
-    r_num = torch.sum(xm * ym)
-    r_den = torch.sqrt(torch.sum(xm**2) * torch.sum(ym**2))
+    r_num = torch.sum(xm * ym, dim=(1, 2, 3, 4))
+    r_den = torch.sqrt(torch.sum(xm**2, dim=(1, 2, 3, 4)) * torch.sum(ym**2, dim=(1, 2, 3, 4)))
     r = r_num / r_den
-    r = torch.max(torch.min(r, torch.tensor(1.0)), torch.tensor(-1.0))
-
-    return 1 - r**2
+    r = torch.clamp(r, -1.0, 1.0)
+    return torch.mean(1 - r**2)
 
 
 def alignment_eval(y_true, y_pred, image_size):
@@ -110,7 +107,7 @@ def rotation_matrix_axis(dim, theta):
     return rm
 
 
-def visualize(y_true, y_pred):
+def visualize_2d_slice(y_true, y_pred):
     """
     Visualizes a 2D slice from the reference subtomogram data (y_true) and the corresponding aligned subtomogram data (y_pred).
 
