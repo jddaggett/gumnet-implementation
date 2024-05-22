@@ -23,12 +23,10 @@ class RigidTransformation3DImputation(nn.Module):
         else:
             raise NotImplementedError
 
-        # Ensure the output retains the original number of channels
         output = torch.real(self._ift3d(
             self._ft3d(X_t) * M1_t + self._ft3d(Y) * M2_t
         ))
         
-        # Ensure output retains the input's number of channels
         output = output[:, :X.size(1), :, :, :]
 
         return output, M1_t, M2_t
