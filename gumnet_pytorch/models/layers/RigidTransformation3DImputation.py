@@ -17,20 +17,21 @@ class RigidTransformation3DImputation(nn.Module):
             X = F.pad(X, (1, 1, 1, 1, 1, 1), "constant", 0)
             theta_rescaled = self._rescale_theta(theta, X)
             X_t = self._batch_affine_warp3d(X, theta_rescaled)
-            X_t = X_t[:, :, 1:-1, 1:-1, 1:-1]
+            X_t = X_t[:, :, 1:-1, 1:-1, 1:-1]  # Remove padding
         elif self.padding_method == "replicate":
             X_t = self._batch_affine_warp3d(X, theta)
         else:
             raise NotImplementedError
 
-        output = torch.real(self._ift3d(
-            self._ft3d(X_t) * M1_t + self._ft3d(Y) * M2_t
-        ))
-        
+        # Perform Fourier transformation and imputation
+        ft_X_t = self._ft3d(X_t)
+        ft_Y = self._ft3d(Y)
+        output = torch.real(self._ift3d(ft_X_t * M1_t + ft_Y * M2_t))
+
+        # Ensure output has the same number of channels as input
         output = output[:, :X.size(1), :, :, :]
 
         return output, M1_t, M2_t
-
 
     def _rescale_theta(self, theta, X):
         shape = X.shape[2:5]
@@ -46,12 +47,10 @@ class RigidTransformation3DImputation(nn.Module):
     def _ift3d(self, x):
         return torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(x, dim=(2, 3, 4)), dim=(2, 3, 4), norm="ortho"), dim=(2, 3, 4))
 
-    
     def _rotation_matrix_zyz(self, params):
         phi = params[0] * 2 * np.pi - np.pi
         theta = params[1] * 2 * np.pi - np.pi
         psi_t = params[2] * 2 * np.pi - np.pi
-
         loc_r = params[3:6] * 2 - 1
 
         a1 = self._rotation_matrix_axis(2, psi_t)
@@ -60,20 +59,17 @@ class RigidTransformation3DImputation(nn.Module):
         rm = torch.mm(torch.mm(a3, a2), a1).t()
 
         c = torch.mm(-rm, loc_r.view(-1, 1)).view(-1)
-
         rm = rm.flatten()
-
         theta = torch.cat([rm[:3], c[0:1], rm[3:6], c[1:2], rm[6:9], c[2:]])
 
         return theta
-
 
     def _rotation_matrix_axis(self, axis, theta):
         cos_theta = torch.cos(theta)
         sin_theta = torch.sin(theta)
         zeros = torch.zeros_like(theta)
         ones = torch.ones_like(theta)
-        
+
         if axis == 0:
             rm = torch.stack([
                 torch.stack([ones, zeros, zeros], dim=-1),
@@ -93,8 +89,9 @@ class RigidTransformation3DImputation(nn.Module):
                 torch.stack([zeros, zeros, ones], dim=-1)
             ], dim=-2)
         else:
-            raise ValueError("dim must be 0, 1, or 2")
+            raise ValueError("axis must be 0, 1, or 2")
         return rm
+
 
     def _interpolate3d(self, imgs, x, y, z):
         n_batch, n_channel, xlen, ylen, zlen = imgs.shape
@@ -211,15 +208,16 @@ class RigidTransformation3DImputation(nn.Module):
         return grids
 
     def _mgrid(self, *args, low=-1, high=1):
-        coords = [torch.linspace(low, high, steps=arg) for arg in args]
+        device = torch.device('cuda')
+        coords = [torch.linspace(low, high, steps=arg, device=device) for arg in args]
         grid = torch.stack(torch.meshgrid(*coords, indexing='ij'))
-
         return grid
+
 
     def _mask_batch_affine_warp3d(self, masks, theta):
         n_batch, n_channel, xlen, ylen, zlen = masks.shape
 
-        c = torch.stack([self._rotation_matrix_zyz(theta[i]) for i in range(n_batch)])
+        c = torch.stack([self._mask_rotation_matrix_zyz(theta[i]) for i in range(n_batch)])
 
         theta = c.view(-1, 3, 4)
         matrix = theta[:, :, :3]

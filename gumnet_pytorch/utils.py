@@ -23,7 +23,7 @@ def correlation_coefficient_loss(y_true, y_pred):
     xm, ym = x - mx, y - my
     r_num = torch.sum(xm * ym, dim=(1, 2, 3, 4))
     r_den = torch.sqrt(torch.sum(xm**2, dim=(1, 2, 3, 4)) * torch.sum(ym**2, dim=(1, 2, 3, 4)))
-    r = r_num / r_den
+    r = r_num / (r_den + 1e-8)
     r = torch.clamp(r, -1.0, 1.0)
     return torch.mean(1 - r**2)
 
@@ -116,8 +116,8 @@ def visualize_2d_slice(y_true, y_pred):
     - y_pred: Corresponding aligned subtomogram data tensor obtained from GumNet results with shape [100, 1, 32, 32, 32]
     """
     # Arbitrarily select the first sample in the batch
-    y_true_sample = y_true[0].squeeze().numpy()
-    y_pred_sample = y_pred[0].squeeze().numpy()
+    y_true_sample = y_true[0].squeeze().cpu().numpy()
+    y_pred_sample = y_pred[0].squeeze().cpu().numpy()
 
     # Arbitrarily select middle 2D slice along depth dimension
     slice_index = y_true_sample.shape[0] // 2
@@ -145,8 +145,8 @@ def save_as_mrc(tensor, filename):
 
 def get_mrc_files(y_true, y_pred):
     try:
-        y_true_sample = y_true[0].squeeze().numpy()
-        y_pred_sample = y_pred[0].squeeze().numpy()
+        y_true_sample = y_true[0].squeeze().cpu().numpy()
+        y_pred_sample = y_pred[0].squeeze().cpu().numpy()
         save_as_mrc(y_true_sample, 'y_true_sample.mrc')
         save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')
         print('Generated 2 mrc files for visualization')
