@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.fftpack import dct, idct
 
+# @TODO check if the 3d dct and idct functions are working with the CUDA tensors
+# when the GPU is not at nearly 100% memory usage
 class SpectralPooling(nn.Module):
     """
     This class implements spectral pooling and filtering using 3D DCT, designed to work with noisy 3D image data.
@@ -14,41 +16,36 @@ class SpectralPooling(nn.Module):
         self.homomorphic = homomorphic  # If True, apply logarithmic and exponential transformations
 
     def forward(self, x):
-        device = x.device  # Save the device of the input tensor
-
-        # Move the tensor to the CPU for DCT and IDCT operations (slows network)
-        # @TODO find a way to do DCT on GPU
-        x = x.cpu()
-
         # Apply logarithmic transformation if homomorphic processing is enabled.
         if self.homomorphic:
             x = torch.log(x + 1e-6)  # Adding a small constant to prevent log(0)
 
         # Perform the 3D DCT, cropping, and then the 3D inverse DCT
-        x_dct = self._dct3D(x)
+        x_dct = self._dct3D(x, norm="ortho")
         x_crop = self._cropping3D(x_dct)
-        x_idct = self._idct3D(x_crop)
+        x_idct = self._idct3D(x_crop, norm="ortho")
 
         # Apply exponential transformation if homomorphic processing was done
         if self.homomorphic:
             x_idct = torch.exp(x_idct)
 
-        # Move the tensor back to the original device
-        x_idct = x_idct.to(device)
-
         return x_idct
-
-    def _dct3D(self, x):
-        # Applying DCT along each dimension
+    
+    # DCT and IDCT functions from https://github.com/zh217/torch-dct
+    def _dct3d(self, x, norm=None):
         x = x.detach().numpy()
-        x = dct(dct(dct(x, axis=2, norm='ortho'), axis=3, norm='ortho'), axis=4, norm='ortho')
-        return torch.tensor(x)
+        X1 = dct(x, norm=norm)
+        X2 = dct(X1.transpose(-1, -2), norm=norm)
+        X3 = dct(X2.transpose(-1, -3), norm=norm)
+        X4 = X3.transpose(-1, -3).transpose(-1, -2)
+        return torch.tensor(X4)
 
-    def _idct3D(self, x):
-        # Applying IDCT along each dimension
-        x = x.detach().numpy()
-        x = idct(idct(idct(x, axis=2, norm='ortho'), axis=3, norm='ortho'), axis=4, norm='ortho')
-        return torch.tensor(x)
+    def _idct3d(self, X, norm=None):
+        x1 = idct(X, norm=norm)
+        x2 = idct(x1.transpose(-1, -2), norm=norm)
+        x3 = idct(x2.transpose(-1, -3), norm=norm)
+        x4 = x3.transpose(-1, -3).transpose(-1, -2)
+        return torch.tensor(x4)
 
     def _cropping3D(self, x):
         # Crop the high-frequency components based on the truncation settings

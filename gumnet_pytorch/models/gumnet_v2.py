@@ -45,7 +45,7 @@ class GumNet(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
         # Rigid transformation layer
-        self.rigid_transform = RigidTransformation3DImputation(output_size=(32, 32, 32))
+        self.rigid_transform = RigidTransformation3DImputation()
 
     def forward(self, sa, sb, mask1, mask2):
         # Process input through shared conv layers and apply spectral pooling
@@ -113,7 +113,9 @@ class GumNet(nn.Module):
         c = self.fc3(c)
         c = self.sigmoid(c)
 
+        print(f'Before transform: sb_000 = {sb[0,0,0,0,0]}, ang_0 = {c[0, :3]}, loc_0 = {c[0, 3:]}\n')
         # Apply transformation
-        transformed, M1_t, M2_t = self.rigid_transform(sa, sb, mask1, mask2, c)
+        sb_hat = self.rigid_transform(sa, sb, mask1, mask2, c)
+        print(f'After transform: sb_000 = {sb_hat[0,0,0,0,0]}, ang_0 = {c[0, :3]}, loc_0 = {c[0, 3:]}\n')
 
-        return transformed, c # sb_hat and 6D transformation parameters
+        return sb_hat, c # sb_hat and 6D transformation parameters
