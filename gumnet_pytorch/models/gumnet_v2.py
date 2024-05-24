@@ -113,9 +113,7 @@ class GumNet(nn.Module):
         c = self.fc3(c)
         c = self.sigmoid(c)
 
-        print(f'Before transform: sb_000 = {sb[0,0,0,0,0]}, ang_0 = {c[0, :3]}, loc_0 = {c[0, 3:]}\n')
         # Apply transformation
-        sb_hat, m1_t, m2_t = self.rigid_transform(sa, sb, mask1, mask2, c)
-        print(f'After transform: sb_000 = {sb_hat[0,0,0,0,0]}, ang_0 = {c[0, :3]}, loc_0 = {c[0, 3:]}\n')
+        sb_hat = self.rigid_transform(sa, sb, mask1, mask2, c)
 
         return sb_hat, c # sb_hat and 6D transformation parameters
