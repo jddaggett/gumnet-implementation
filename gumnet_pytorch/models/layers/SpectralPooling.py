@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from scipy.fftpack import dct, idct
+from scipy.fftpack import dctn, idctn
 
 # @TODO check if the 3d dct and idct functions are working with the CUDA tensors
 # when the GPU is not at nearly 100% memory usage
@@ -21,9 +21,9 @@ class SpectralPooling(nn.Module):
             x = torch.log(x + 1e-6)  # Adding a small constant to prevent log(0)
 
         # Perform the 3D DCT, cropping, and then the 3D inverse DCT
-        x_dct = self._dct3D(x, norm="ortho")
+        x_dct = self._dct3D(x)
         x_crop = self._cropping3D(x_dct)
-        x_idct = self._idct3D(x_crop, norm="ortho")
+        x_idct = self._idct3D(x_crop)
 
         # Apply exponential transformation if homomorphic processing was done
         if self.homomorphic:
@@ -31,21 +31,15 @@ class SpectralPooling(nn.Module):
 
         return x_idct
     
-    # DCT and IDCT functions from https://github.com/zh217/torch-dct
-    def _dct3d(self, x, norm=None):
-        x = x.detach().numpy()
-        X1 = dct(x, norm=norm)
-        X2 = dct(X1.transpose(-1, -2), norm=norm)
-        X3 = dct(X2.transpose(-1, -3), norm=norm)
-        X4 = X3.transpose(-1, -3).transpose(-1, -2)
-        return torch.tensor(X4)
+    def _dct3D(self, x):
+        x_np = x.cpu().detach().numpy()
+        x_dct = dctn(x_np, norm='ortho')
+        return torch.tensor(x_dct, device=x.device)
 
-    def _idct3d(self, X, norm=None):
-        x1 = idct(X, norm=norm)
-        x2 = idct(x1.transpose(-1, -2), norm=norm)
-        x3 = idct(x2.transpose(-1, -3), norm=norm)
-        x4 = x3.transpose(-1, -3).transpose(-1, -2)
-        return torch.tensor(x4)
+    def _idct3D(self, x):
+        x_np = x.cpu().detach().numpy()
+        x_idct = idctn(x_np, norm='ortho')
+        return torch.tensor(x_idct, device=x.device)
 
     def _cropping3D(self, x):
         # Crop the high-frequency components based on the truncation settings
