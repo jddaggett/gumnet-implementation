@@ -6,19 +6,31 @@ import numpy as np
 import pickle
 from models.gumnet_v2 import GumNet
 from utils import *
-from torch.cuda.amp import autocast, GradScaler
 
-def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device):
+def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device, batch_size=4):
     model.eval()
     with torch.no_grad():
         x_test = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
         y_test = torch.tensor(y_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
         mask_1 = np.tile(np.expand_dims(observed_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
         mask_2 = np.tile(np.expand_dims(missing_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
-        m1 = torch.tensor(mask_1, dtype=torch.float32).to(device)
-        m2 = torch.tensor(mask_2, dtype=torch.float32).to(device)
-        output, params = model(x_test, y_test, m1, m2)
-    return output, params.detach().cpu().numpy()
+        m1 = torch.tensor(mask_1, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
+        m2 = torch.tensor(mask_2, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
+        transformation_outputs = []
+        y_preds = []
+        for i in range(0, len(x_test), batch_size):
+            x_batch = x_test[i:i+batch_size]
+            y_batch = y_test[i:i+batch_size]
+            mask1_batch = m1[i:i+batch_size]
+            mask2_batch = m2[i:i+batch_size]
+            
+            output, params = model(x_batch, y_batch, mask1_batch, mask2_batch)
+            transformation_outputs.append(output)
+            y_preds.append(params)
+            
+    transformation_output = torch.cat(transformation_outputs, dim=0)
+    y_pred = torch.cat(y_preds, dim=0)
+    return transformation_output, y_pred.detach().cpu().numpy()
 
 def create_dataloaders(x_test, y_test, observed_mask, missing_mask, batch_size):
     mask_1 = np.tile(np.expand_dims(observed_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
@@ -52,12 +64,8 @@ def main():
 
     # Define optimizer and scaler
     # @TODO optimize learning parameters
-    initial_lr = float(5e-5)
-    decay_rate = 5
-    decay_factor = 0.7
+    initial_lr = float(1e-6)
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
-    scaler = GradScaler()
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=decay_rate, gamma=decay_factor)
     for param in model.parameters():
         param.requires_grad = True
 
@@ -75,26 +83,22 @@ def main():
 
         epoch_loss = 0
         for x_batch, y_batch, mask_1_batch, mask_2_batch in dataloader:
-            x_batch = x_batch.permute(0, 4, 1, 2, 3).to(device).requires_grad_()
-            y_batch = y_batch.permute(0, 4, 1, 2, 3).to(device).requires_grad_()
-            mask_1_batch = mask_1_batch.permute(0, 4, 1, 2, 3).to(device).requires_grad_()
-            mask_2_batch = mask_2_batch.permute(0, 4, 1, 2, 3).to(device).requires_grad_()
+            x_batch = x_batch.permute(0, 4, 1, 2, 3).to(device)
+            y_batch = y_batch.permute(0, 4, 1, 2, 3).to(device)
+            mask_1_batch = mask_1_batch.permute(0, 4, 1, 2, 3).to(device)
+            mask_2_batch = mask_2_batch.permute(0, 4, 1, 2, 3).to(device)
 
             optimizer.zero_grad()
-            with autocast():
-                output, _ = model(x_batch, y_batch, mask_1_batch, mask_2_batch)
-                loss = correlation_coefficient_loss(y_batch, output)
-                epoch_loss += loss.item()
-            
-            scaler.scale(loss).backward()
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Prevent gradient explosion
-            scaler.step(optimizer)
-            scaler.update()
+            output, _ = model(x_batch, y_batch, mask_1_batch, mask_2_batch)
+            loss = correlation_coefficient_loss(y_batch, output)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
 
-        scheduler.step()  # Decay learning rate incrementally
         print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}')
 
     # 5. Evaluate the model after fine-tuning
+    torch.cuda.empty_cache()
     transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device)
     print('After finetuning:')
     alignment_eval(ground_truth, y_pred, x_test.shape[2])
