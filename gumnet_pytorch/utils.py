@@ -1,18 +1,7 @@
 import numpy as np
 import torch
 import math
-from scipy.ndimage import rotate
-from skimage.io import imsave
-from skimage import img_as_ubyte
 import matplotlib.pyplot as plt
-
-
-def get_initial_weights(output_size):
-    b = np.random.random((6, )) - 0.5
-    W = np.zeros((output_size, 6), dtype='float32')
-    weights = [torch.tensor(W), torch.tensor(b.flatten(), dtype=torch.float32)]
-
-    return weights
 
 
 def correlation_coefficient_loss(y_true, y_pred):
