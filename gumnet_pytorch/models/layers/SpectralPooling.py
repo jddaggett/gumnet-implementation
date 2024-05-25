@@ -32,16 +32,51 @@ class SpectralPooling(nn.Module):
         return x_idct
     
     def _dct3D(self, x):
-        # Perform DCT using FFT
-        x = torch.fft.fftn(x, dim=(2, 3, 4), norm='ortho')
-        x = torch.real(x)
-        return x
+        return self._apply_dct(x, type='dct')
 
     def _idct3D(self, x):
-        # Perform inverse DCT using FFT
-        x = torch.fft.ifftn(x, dim=(2, 3, 4), norm='ortho')
-        x = torch.real(x)
+        return self._apply_dct(x, type='idct')
+
+    # @TODO computationally complex, may needto find an optimized alternative 
+    def _apply_dct(self, x, type='dct'):
+        batch_size, channels, depth, height, width = x.shape
+
+        # DCT basis matrices
+        dct_mat_depth = self._create_dct_matrix(depth, type)
+        dct_mat_height = self._create_dct_matrix(height, type)
+        dct_mat_width = self._create_dct_matrix(width, type)
+
+        dct_mat_depth = dct_mat_depth.to(x.device)
+        dct_mat_height = dct_mat_height.to(x.device)
+        dct_mat_width = dct_mat_width.to(x.device)
+
+        x = x.permute(0, 1, 4, 3, 2)  # reshape to (batch, channel, width, height, depth)
+        x = torch.matmul(dct_mat_width, x)
+        x = x.permute(0, 1, 4, 3, 2)
+        x = torch.matmul(dct_mat_height, x)
+        x = x.permute(0, 1, 4, 3, 2)
+        x = torch.matmul(dct_mat_depth, x)
+        x = x.permute(0, 1, 4, 3, 2)
+
         return x
+
+    def _create_dct_matrix(self, N, type='dct'):
+        if type not in ['dct', 'idct']:
+            raise ValueError("Type must be 'dct' or 'idct'")
+        mat = torch.zeros((N, N))
+        for k in range(N):
+            for n in range(N):
+                if type == 'dct':
+                    if k == 0:
+                        mat[k, n] = 1 / np.sqrt(N)
+                    else:
+                        mat[k, n] = np.sqrt(2 / N) * np.cos(np.pi * (2 * n + 1) * k / (2 * N))
+                elif type == 'idct':
+                    if n == 0:
+                        mat[k, n] = 1 / np.sqrt(N)
+                    else:
+                        mat[k, n] = np.sqrt(2 / N) * np.cos(np.pi * (2 * k + 1) * n / (2 * N))
+        return mat
 
     def _cropping3D(self, x):
         # Crop the high-frequency components based on the truncation settings
