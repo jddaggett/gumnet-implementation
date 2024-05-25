@@ -115,6 +115,7 @@ def visualize_2d_slice(y_true, y_pred):
     - y_true: Reference subtomogram data tensor with shape [100, 1, 32, 32, 32]
     - y_pred: Corresponding aligned subtomogram data tensor obtained from GumNet results with shape [100, 1, 32, 32, 32]
     """
+
     # Arbitrarily select the first sample in the batch
     y_true_sample = y_true[0].squeeze().cpu().numpy()
     y_pred_sample = y_pred[0].squeeze().cpu().numpy()
