@@ -10,20 +10,17 @@ class RigidTransformation3DImputation(nn.Module):
         self.output_size = output_size
         self.padding_method = padding_method
 
-    # input theta is [batches, 6] with columns: T_x, T_y, T_z, phi, theta, psi
-    # where [phi, theta, psi] are the ZYZ rotation angles which have been passed through
-    # sigmoid activation and exist on a [0, 1] scale
     def forward(self, X, Y, m1, m2, theta):
         X, Y, m1, m2, theta = [tensor.to(self.device) for tensor in (X, Y, m1, m2, theta)]
 
-        # warp masks with rotation params 
+        # Warp masks with rotation params 
         M1_t = self._mask_batch_affine_warp3d(m1, theta)
         M2_t = self._mask_batch_affine_warp3d(m2, theta)
 
         # Pad and 3D transform X
         X_t = self._apply_padding_and_transform(X, theta)
 
-        # Apply fourier transform and masks to get missing pieces from Y and non-missing pieces from X
+        # Apply Fourier transform and masks to get missing pieces from Y and non-missing pieces from X
         FT_X_t_masked = self._ft3d(X_t) * M1_t.to(dtype=torch.complex64)
         FT_Y_masked = self._ft3d(Y) * M2_t.to(dtype=torch.complex64)
 
@@ -42,60 +39,11 @@ class RigidTransformation3DImputation(nn.Module):
             raise NotImplementedError(f"Padding method {self.padding_method} not implemented")
         return X_t
 
-    def _apply_affine_transform(self, tensor, theta):
-        grid = self._affine_grid(theta, tensor.size())
-        transformed_tensor = F.grid_sample(tensor, grid, mode='bilinear', padding_mode='border', align_corners=True)
-        return transformed_tensor
-
-    def _affine_grid(self, theta, size):
-        batch_size = theta.size(0)
-        theta_matrix = self._compute_theta_matrix(theta)
-        # Correcting the size parameter to include the channels
-        grid = F.affine_grid(theta_matrix, [batch_size, *size[1:]], align_corners=True)
-        return grid
-
-    def _compute_theta_matrix(self, theta):
-        batch_size = theta.size(0)
-        rotation_matrices = torch.stack([self._rotation_matrix_zyz(theta[i, :3]) for i in range(batch_size)])
-        translation_vectors = theta[:, 3:].unsqueeze(-1)
-        theta_matrix = torch.cat((rotation_matrices, translation_vectors), dim=2)
-        return theta_matrix
-
-    def _rotation_matrix_zyz(self, params):
-        phi, theta, psi = (params * 2 * np.pi - np.pi).to(self.device)
-        cos_phi, sin_phi = torch.cos(phi), torch.sin(phi)
-        cos_theta, sin_theta = torch.cos(theta), torch.sin(theta)
-        cos_psi, sin_psi = torch.cos(psi), torch.sin(psi)
-
-        # R_z
-        r1 = torch.tensor([[cos_phi, -sin_phi, 0],
-                           [sin_phi, cos_phi, 0],
-                           [0, 0, 1]], device=self.device)
-        
-        # R_y
-        r2 = torch.tensor([[cos_theta, 0, sin_theta],
-                           [0, 1, 0],
-                           [-sin_theta, 0, cos_theta]], device=self.device)
-        
-        # R_z
-        r3 = torch.tensor([[cos_psi, -sin_psi, 0],
-                           [sin_psi, cos_psi, 0],
-                           [0, 0, 1]], device=self.device)
-
-        rotation_matrix = r3 @ r2 @ r1
-        return rotation_matrix
-
-    # convert transformaton params to 4x4 3D transformation matrix defined by
-    # ZYZ rotation matrix and translation vector to warp all 3D images in X tensor
-    # Must homogenize coordinates
     def _batch_affine_warp3d(self, X, theta):
         grid = self._affine_grid(theta, X.size())
         X_t = F.grid_sample(X, grid, mode='bilinear', padding_mode='border', align_corners=True)
         return X_t
 
-    # convert transformaton params to 4x4 3D transformation matrix defined by
-    # ZYZ rotation matrix and a 0 translation vector (only rotation) to warp all 3D images in X tensor
-    # Must homogenize coordinates
     def _mask_batch_affine_warp3d(self, masks, theta):
         theta_rot = theta.clone()
         theta_rot[:, :3] = 0  # Zero out translation part
@@ -103,10 +51,42 @@ class RigidTransformation3DImputation(nn.Module):
         masks_t = F.grid_sample(masks, grid, mode='bilinear', padding_mode='border', align_corners=True)
         return masks_t
 
-    # uses torch functionality to greatly simplify FT along spatial dims
+    def _affine_grid(self, theta, size):
+        batch_size = theta.size(0)
+        theta_matrix = self._compute_theta_matrix(theta)
+        grid = F.affine_grid(theta_matrix[:, :3, :], [batch_size, *size[1:]], align_corners=True)
+        return grid
+
+    def _compute_theta_matrix(self, theta):
+        batch_size = theta.size(0)
+        rotation_matrices = torch.stack([self._rotation_matrix_zyz(theta[i, 3:]) for i in range(batch_size)])
+        translation_vectors = theta[:, :3].unsqueeze(-1)
+        theta_matrix = torch.cat((rotation_matrices, translation_vectors), dim=2)
+        return theta_matrix
+
+    def _rotation_matrix_zyz(self, params):
+        phi, theta, psi = params * 2 * np.pi
+        cos_phi, sin_phi = torch.cos(phi), torch.sin(phi)
+        cos_theta, sin_theta = torch.cos(theta), torch.sin(theta)
+        cos_psi, sin_psi = torch.cos(psi), torch.sin(psi)
+
+        r1 = torch.tensor([[cos_phi, -sin_phi, 0],
+                           [sin_phi, cos_phi, 0],
+                           [0, 0, 1]], device=params.device)
+
+        r2 = torch.tensor([[cos_theta, 0, sin_theta],
+                           [0, 1, 0],
+                           [-sin_theta, 0, cos_theta]], device=params.device)
+
+        r3 = torch.tensor([[cos_psi, -sin_psi, 0],
+                           [sin_psi, cos_psi, 0],
+                           [0, 0, 1]], device=params.device)
+
+        rotation_matrix = r3 @ r2 @ r1
+        return rotation_matrix
+
     def _ft3d(self, x):
         return torch.fft.fftn(x, dim=(-3, -2, -1))
 
-    # inverse FT
     def _ift3d(self, x):
         return torch.fft.ifftn(x, dim=(-3, -2, -1))
