@@ -37,7 +37,7 @@ class SpectralPooling(nn.Module):
     def _idct3D(self, x):
         return self._apply_dct(x, type='idct')
 
-    # @TODO computationally complex, may needto find an optimized alternative 
+    # @TODO computationally complex, may need to find an optimized alternative 
     def _apply_dct(self, x, type='dct'):
         batch_size, channels, depth, height, width = x.shape
 

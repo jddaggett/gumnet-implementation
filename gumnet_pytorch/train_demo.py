@@ -64,7 +64,7 @@ def main():
 
     # Define optimizer and scaler
     # @TODO optimize learning parameters
-    initial_lr = float(1e-6)
+    initial_lr = float(1e-7)
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
     for param in model.parameters():
         param.requires_grad = True
