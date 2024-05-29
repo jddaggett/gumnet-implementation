@@ -14,7 +14,4 @@ class FeatureL2Norm(nn.Module):
         super(FeatureL2Norm, self).__init__()
 
     def forward(self, x):
-        epsilon = 1e-6
-        norm = torch.sqrt(torch.sum(x ** 2, dim=1, keepdim=True) + epsilon)
-        normalized_output = x / norm
-        return normalized_output
+        return x / torch.norm(x, p=2, dim=1, keepdim=True) + 1e-6
