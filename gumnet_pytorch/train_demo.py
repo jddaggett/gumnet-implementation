@@ -6,6 +6,7 @@ import numpy as np
 import pickle
 from models.gumnet_v2 import GumNet
 from utils import *
+import torchvision.transforms as transforms
 
 def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device, batch_size=4):
     model.eval()
@@ -44,6 +45,13 @@ def create_dataloaders(x_test, y_test, observed_mask, missing_mask, batch_size):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return dataloader
 
+# Added He weight initialization for better training results
+def initialize_weights(module):
+    if isinstance(module, nn.Conv3d) or isinstance(module, nn.Linear):
+        nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+
 def main(DEBUG=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -60,11 +68,13 @@ def main(DEBUG=False):
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
     model = GumNet().to(device)
+    model.apply(initialize_weights)
     print('Gum-Net model initialized!')
 
     # Define optimizer
-    initial_lr = float(1e-7)  # Adjust learning rate
+    initial_lr = float(1e-7)
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.9 ** epoch)
     for param in model.parameters():
         param.requires_grad = True
 
@@ -110,6 +120,7 @@ def main(DEBUG=False):
             optimizer.step()
             epoch_loss += loss.item()
 
+        scheduler.step()
         print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}')
 
     # 5. Evaluate the model after fine-tuning
@@ -124,4 +135,4 @@ def main(DEBUG=False):
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main(DEBUG=True)
+    main(DEBUG=False)
