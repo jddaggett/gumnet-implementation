@@ -106,8 +106,8 @@ def visualize_2d_slice(y_true, y_pred):
     """
 
     # Arbitrarily select the first sample in the batch
-    y_true_sample = y_true[0].squeeze().cpu().numpy()
-    y_pred_sample = y_pred[0].squeeze().cpu().numpy()
+    y_true_sample = y_true[0].squeeze().cpu().detach().numpy()
+    y_pred_sample = y_pred[0].squeeze().cpu().detach().numpy()
 
     # Arbitrarily select middle 2D slice along depth dimension
     slice_index = y_true_sample.shape[0] // 2
@@ -135,8 +135,8 @@ def save_as_mrc(tensor, filename):
 
 def get_mrc_files(y_true, y_pred):
     try:
-        y_true_sample = y_true[0].squeeze().cpu().numpy()
-        y_pred_sample = y_pred[0].squeeze().cpu().numpy()
+        y_true_sample = y_true[0].squeeze().cpu().detach().numpy()
+        y_pred_sample = y_pred[0].squeeze().cpu().detach().numpy()
         save_as_mrc(y_true_sample, 'y_true_sample.mrc')
         save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')
         print('Generated 2 mrc files for visualization')
