@@ -44,7 +44,7 @@ def create_dataloaders(x_test, y_test, observed_mask, missing_mask, batch_size):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return dataloader
 
-def main():
+def main(DEBUG=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
@@ -62,9 +62,8 @@ def main():
     model = GumNet().to(device)
     print('Gum-Net model initialized!')
 
-    # Define optimizer and scaler
-    # @TODO optimize learning parameters
-    initial_lr = float(1e-7)
+    # Define optimizer
+    initial_lr = float(1e-7)  # Adjust learning rate
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
     for param in model.parameters():
         param.requires_grad = True
@@ -78,9 +77,6 @@ def main():
     model.train()
     for i in range(20):
         print('Training Iteration ' + str(i+1))
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = initial_lr * 0.9 ** i
-
         epoch_loss = 0
         for x_batch, y_batch, mask_1_batch, mask_2_batch in dataloader:
             x_batch = x_batch.permute(0, 4, 1, 2, 3).to(device)
@@ -91,7 +87,26 @@ def main():
             optimizer.zero_grad()
             output, _ = model(x_batch, y_batch, mask_1_batch, mask_2_batch)
             loss = correlation_coefficient_loss(y_batch, output)
+
+            # Check for NaNs in loss
+            if torch.isnan(loss).any():
+                print("NaNs in loss detected!")
+                continue
+
             loss.backward()
+
+            # Print gradients to check if they are being updated
+            if DEBUG:
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()
+                        if grad_norm == 0:
+                            print(f"Gradients for {name} are zero.")
+                        else:
+                            print(f"Gradients for {name}: {grad_norm}")
+                    else:
+                        print(f"No gradients for {name}")
+
             optimizer.step()
             epoch_loss += loss.item()
 
@@ -109,4 +124,4 @@ def main():
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main()
+    main(DEBUG=True)
