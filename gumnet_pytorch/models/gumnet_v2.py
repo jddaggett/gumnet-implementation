@@ -39,7 +39,7 @@ class GumNet(nn.Module):
         self.relu = nn.ReLU()
 
         # Fully connected layers
-        self.fc1 = nn.Linear(93312, 2000) # input size obtained experimentally
+        self.fc1 = nn.Linear(31250, 2000) # input size obtained experimentally
         self.fc2 = nn.Linear(2000, 2000)
         self.fc3 = nn.Linear(2000, 6)
         self.sigmoid = nn.Sigmoid()
