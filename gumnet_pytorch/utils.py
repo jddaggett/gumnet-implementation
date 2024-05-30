@@ -1,7 +1,53 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import math
 import matplotlib.pyplot as plt
+import random
+
+# Data augmentation to prevent overfitting
+def random_flip_3d(volume):
+    # Randomly flip along each axis
+    if random.random() > 0.5:
+        volume = np.flip(volume, axis=0)
+    if random.random() > 0.5:
+        volume = np.flip(volume, axis=1)
+    if random.random() > 0.5:
+        volume = np.flip(volume, axis=2)
+    return volume
+
+def random_rotate_3d(volume):
+    # Randomly rotate by 90 degrees increments
+    axes = [(0, 1), (1, 2), (0, 2)]
+    for axis in axes:
+        k = random.randint(0, 3)
+        volume = np.rot90(volume, k, axis)
+    return volume
+
+def augment_data(x, y):
+    augmented_x = []
+    augmented_y = []
+    for xi, yi in zip(x, y):
+        xi = random_flip_3d(xi)
+        xi = random_rotate_3d(xi)
+        yi = random_flip_3d(yi)
+        yi = random_rotate_3d(yi)
+        augmented_x.append(xi)
+        augmented_y.append(yi)
+    return np.array(augmented_x), np.array(augmented_y)
+
+# Added He weight initialization to prevent gradient vanishing
+def initialize_weights(module, name='He'):
+    if isinstance(module, nn.Conv3d) or isinstance(module, nn.Linear):
+        if name == 'He':
+            nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+        elif name == 'Xavier':
+            nn.init.xavier_normal_(module.weight)
+        else:
+            print('Invalid weight initialization method. Defaulting to He initialization.')
+            nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
 
 
 def correlation_coefficient_loss(y_true, y_pred):
