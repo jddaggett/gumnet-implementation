@@ -6,7 +6,6 @@ import numpy as np
 import pickle
 from models.gumnet_v2 import GumNet
 from utils import *
-import torchvision.transforms as transforms
 
 def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device, batch_size=4):
     model.eval()
@@ -45,45 +44,41 @@ def create_dataloaders(x_test, y_test, observed_mask, missing_mask, batch_size):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return dataloader
 
-# Added He weight initialization for better training results
-def initialize_weights(module):
-    if isinstance(module, nn.Conv3d) or isinstance(module, nn.Linear):
-        nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
-        if module.bias is not None:
-            nn.init.constant_(module.bias, 0)
-
 def main(DEBUG=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # 1. Load and preprocess train data
+    # 1. Load the train data
     with open('../dataset/gum_demo_data.pickle', 'rb') as f:
         x_test, y_test, observed_mask, missing_mask, ground_truth = pickle.load(f, encoding='latin1')
+    
+    # 2. Augment and normalize data then create dataloader for batches
+    x_test, y_test = augment_data(x_test, y_test)
     x_test = (x_test - np.mean(x_test)) / np.std(x_test)
     y_test = (y_test - np.mean(y_test)) / np.std(y_test)
     dataloader = create_dataloaders(x_test, y_test, observed_mask, missing_mask, batch_size=32)
     print('Data successfully loaded!')
 
-    # 2. Initialize model
+    # 3. Initialize model and weights
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
     model = GumNet().to(device)
     model.apply(initialize_weights)
     print('Gum-Net model initialized!')
 
-    # Define optimizer
+    # 4. Initialize hyperparameters and optimizer
     initial_lr = float(1e-7)
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
-    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.9 ** epoch)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     for param in model.parameters():
         param.requires_grad = True
 
-    # 3. Evaluate the model before fine-tuning
+    # 5. Evaluate the model before fine-tuning
     transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device)
     print('Evaluation (no fine-tuning):')
     alignment_eval(ground_truth, y_pred, x_test.shape[2])
 
-    # 4. Fine-tune the model for 20 iterations
+    # 6. Fine-tune the model for 20 iterations
     model.train()
     for i in range(20):
         print('Training Iteration ' + str(i+1))
@@ -123,16 +118,16 @@ def main(DEBUG=False):
         scheduler.step()
         print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}')
 
-    # 5. Evaluate the model after fine-tuning
+    # 7. Evaluate the model after fine-tuning
     torch.cuda.empty_cache()
     transformation_output, y_pred = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device)
     print('After finetuning:')
     alignment_eval(ground_truth, y_pred, x_test.shape[2])
 
-    # 6. Visualize results
+    # 8. Visualize results
     x_tensor = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
     visualize_2d_slice(x_tensor.cpu(), transformation_output.cpu())
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main(DEBUG=False)
+    main(DEBUG=True) # Set DEBUG=True to print weight gradient values to the terminal at runtime
