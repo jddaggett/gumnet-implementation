@@ -5,14 +5,6 @@ from models.layers.FeatureL2Norm import FeatureL2Norm
 from models.layers.RigidTransformation3DImputation import RigidTransformation3DImputation
 from models.layers.SpectralPooling import SpectralPooling
 
-"""
-Improvement:
-1.The convolutional layers are still defined one by one, but with direct assignment of batch normalization right after each convolutional layer definition.
-2.uses FeatureL2Norm() after processing the streams, uses FeatureCorrelation() after each stream processing and applies feature normalization to its output
-3.Add extra layers such as batch normalization and ReLU activation.
-4.Shows the concatenation of flattened outputs from correlation maps, followed by dense layers to produce the final transformation parameters.
-"""
-
 class GumNet(nn.Module):
     def __init__(self):
         super(GumNet, self).__init__()
@@ -29,6 +21,13 @@ class GumNet(nn.Module):
         self.bn3 = nn.BatchNorm3d(128)
         self.bn4 = nn.BatchNorm3d(256)
         self.bn5 = nn.BatchNorm3d(512)
+
+        # Define dropout layers
+        self.dropout1 = nn.Dropout3d(0.3)
+        self.dropout2 = nn.Dropout3d(0.3)
+        self.dropout3 = nn.Dropout3d(0.3)
+        self.dropout4 = nn.Dropout3d(0.3)
+        self.dropout5 = nn.Dropout3d(0.3)
 
         # Define the spectral pooling layers
         self.spectral_pool1 = SpectralPooling((26, 26, 26), (22, 22, 22))
@@ -50,59 +49,62 @@ class GumNet(nn.Module):
     def forward(self, sa, sb, mask1, mask2):
         # Process input through shared conv layers and apply spectral pooling
         va = self.shared_conv1(sa)
-        va = self.bn1(va)
         va = self.relu(va)
+        va = self.bn1(va)
         va = self.spectral_pool1(va)
 
         va = self.shared_conv2(va)
-        va = self.bn2(va)
         va = self.relu(va)
+        va = self.bn2(va)
         va = self.spectral_pool2(va)
 
         va = self.shared_conv3(va)
-        va = self.bn3(va)
         va = self.relu(va)
+        va = self.bn3(va)
         va = self.spectral_pool3(va)
 
         va = self.shared_conv4(va)
-        va = self.bn4(va)
         va = self.relu(va)
+        va = self.bn4(va)
         va = self.spectral_pool4(va)
 
         va = self.shared_conv5(va)
-        va = self.bn5(va)
         va = self.relu(va)
+        va = self.bn5(va)
         va = FeatureL2Norm()(va)
 
         # Repeat for sb
         vb = self.shared_conv1(sb)
         vb = self.bn1(vb)
         vb = self.relu(vb)
+        vb = self.dropout1(vb)
         vb = self.spectral_pool1(vb)
 
         vb = self.shared_conv2(vb)
-        vb = self.bn2(vb)
         vb = self.relu(vb)
+        vb = self.bn2(vb)
         vb = self.spectral_pool2(vb)
 
         vb = self.shared_conv3(vb)
-        vb = self.bn3(vb)
         vb = self.relu(vb)
+        vb = self.bn3(vb)
         vb = self.spectral_pool3(vb)
 
         vb = self.shared_conv4(vb)
-        vb = self.bn4(vb)
         vb = self.relu(vb)
+        vb = self.bn4(vb)
         vb = self.spectral_pool4(vb)
 
         vb = self.shared_conv5(vb)
-        vb = self.bn5(vb)
         vb = self.relu(vb)
+        vb = self.bn5(vb)
         vb = FeatureL2Norm()(vb)
 
         # Apply correlation and flatten for fully connected layers
         c_ab = FeatureCorrelation()(va, vb).view(va.size(0), -1)
+        c_ab = FeatureL2Norm()(c_ab)
         c_ba = FeatureCorrelation()(vb, va).view(vb.size(0), -1)
+        c_ba = FeatureL2Norm()(c_ba)
 
         # Concatenate and pass through fully connected layers
         c = torch.cat((c_ab, c_ba), dim=1)
