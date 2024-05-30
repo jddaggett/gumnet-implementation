@@ -130,4 +130,4 @@ def main(DEBUG=False):
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main(DEBUG=True) # Set DEBUG=True to print weight gradient values to the terminal at runtime
+    main(DEBUG=False) # Set DEBUG=True to print weight gradient values to the terminal at runtime
