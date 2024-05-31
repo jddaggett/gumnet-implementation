@@ -3,38 +3,29 @@ import torch
 import torch.nn as nn
 import math
 import matplotlib.pyplot as plt
-import random
+from scipy.ndimage import rotate, shift
 
 # Data augmentation to prevent overfitting
-def random_flip_3d(volume):
-    # Randomly flip along each axis
-    if random.random() > 0.5:
-        volume = np.flip(volume, axis=0)
-    if random.random() > 0.5:
-        volume = np.flip(volume, axis=1)
-    if random.random() > 0.5:
-        volume = np.flip(volume, axis=2)
-    return volume
-
-def random_rotate_3d(volume):
-    # Randomly rotate by 90 degrees increments
-    axes = [(0, 1), (1, 2), (0, 2)]
-    for axis in axes:
-        k = random.randint(0, 3)
-        volume = np.rot90(volume, k, axis)
-    return volume
-
 def augment_data(x, y):
-    augmented_x = []
-    augmented_y = []
-    for xi, yi in zip(x, y):
-        xi = random_flip_3d(xi)
-        xi = random_rotate_3d(xi)
-        yi = random_flip_3d(yi)
-        yi = random_rotate_3d(yi)
-        augmented_x.append(xi)
-        augmented_y.append(yi)
-    return np.array(augmented_x), np.array(augmented_y)
+    # Randomly rotate
+    angle_x = np.random.uniform(-10, 10)
+    angle_y = np.random.uniform(-10, 10)
+    angle_z = np.random.uniform(-10, 10)
+    x = rotate(x, angle_x, axes=(1, 2), reshape=False)
+    x = rotate(x, angle_y, axes=(2, 3), reshape=False)
+    x = rotate(x, angle_z, axes=(1, 3), reshape=False)
+    y = rotate(y, angle_x, axes=(1, 2), reshape=False)
+    y = rotate(y, angle_y, axes=(2, 3), reshape=False)
+    y = rotate(y, angle_z, axes=(1, 3), reshape=False)
+
+    # Randomly translate
+    translate_x = np.random.uniform(-5, 5)
+    translate_y = np.random.uniform(-5, 5)
+    translate_z = np.random.uniform(-5, 5)
+    x = shift(x, (0, translate_x, translate_y, translate_z, 0), order=1)
+    y = shift(y, (0, translate_x, translate_y, translate_z, 0), order=1)
+
+    return x, y
 
 # Added He weight initialization to prevent gradient vanishing
 def initialize_weights(module, name='He'):
