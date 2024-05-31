@@ -63,13 +63,14 @@ def main(DEBUG=False):
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
     model = GumNet().to(device)
-    model.apply(initialize_weights)
+    # @TODO uncomment for custom weight initialization. details in utils.py
+    # model.apply(lambda m: initialize_weights(m, name='He'))
     print('Gum-Net model initialized!')
 
     # 4. Initialize hyperparameters and optimizer
-    initial_lr = float(1e-7)
+    initial_lr = 1e-7
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
     for param in model.parameters():
         param.requires_grad = True
 
@@ -99,24 +100,21 @@ def main(DEBUG=False):
                 continue
 
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Avoid exploding gradients
 
-            # Print gradients to check if they are being updated
+            # Print gradients for debugging
             if DEBUG:
                 for name, param in model.named_parameters():
                     if param.grad is not None:
-                        grad_norm = param.grad.norm().item()
-                        if grad_norm == 0:
-                            print(f"Gradients for {name} are zero.")
-                        else:
-                            print(f"Gradients for {name}: {grad_norm}")
+                        print(f"Gradients for {name}: {param.grad.norm().item()}")
                     else:
                         print(f"No gradients for {name}")
-
             optimizer.step()
             epoch_loss += loss.item()
 
-        scheduler.step()
-        print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}')
+        scheduler.step(epoch_loss / len(dataloader))
+        current_lr = scheduler.optimizer.param_groups[0]['lr']
+        print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}. Current LR: {current_lr}')
 
     # 7. Evaluate the model after fine-tuning
     torch.cuda.empty_cache()
@@ -130,4 +128,4 @@ def main(DEBUG=False):
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main(DEBUG=False) # Set DEBUG=True to print weight gradient values to the terminal at runtime
+    main(DEBUG=True)  # Set DEBUG=True to print weight gradient values to the terminal at runtime
