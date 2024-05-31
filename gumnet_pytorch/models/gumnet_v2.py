@@ -46,7 +46,7 @@ class GumNet(nn.Module):
         self.bn7 = nn.BatchNorm3d(1024)
 
         # Fully connected layers
-        self.fc1 = nn.Linear(1024 * 2, 2000)  # Adjusted input size based on conv layers
+        self.fc1 = nn.Linear(2048, 2000)  # Adjusted input size based on conv layers
         self.fc2 = nn.Linear(2000, 2000)
         self.fc3 = nn.Linear(2000, 6)
         self.sigmoid = nn.Sigmoid()
