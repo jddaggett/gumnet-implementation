@@ -14,4 +14,5 @@ class FeatureL2Norm(nn.Module):
         super(FeatureL2Norm, self).__init__()
 
     def forward(self, x):
+        # numerically stable L2 normalization
         return x / torch.norm(x, p=2, dim=1, keepdim=True) + 1e-6

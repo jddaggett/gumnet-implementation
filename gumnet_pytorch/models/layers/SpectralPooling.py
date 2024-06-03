@@ -17,11 +17,11 @@ class SpectralPooling(nn.Module):
         # Apply 3D DCT using FFT
         N = x.shape[-3:]
         X = torch.fft.fftn(x, dim=(-3, -2, -1))
-        for i in range(3):
+        for i in range(3): # Iterate over spatial dims
             n = N[i]
             k = torch.arange(n, device=x.device).unsqueeze(0)
-            X = X * torch.exp(-1j * np.pi * k / (2 * n))
-        return X.real
+            X = X * torch.exp(-1j * np.pi * k / (2 * n)) # Apply DCT factor to FFT result
+        return X.real # Return only real-valued coefficients
 
     def _idct3D(self, x):
         # Apply 3D inverse DCT using FFT
