@@ -7,7 +7,7 @@ import pickle
 from models.gumnet_v2 import GumNet
 from utils import *
 
-def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device, batch_size=4):
+def get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device, batch_size=32):
     model.eval()
     with torch.no_grad():
         x_test = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
@@ -64,13 +64,13 @@ def main(DEBUG=False):
     torch.backends.cudnn.benchmark = False
     model = GumNet().to(device)
     # @TODO uncomment for custom weight initialization. details in utils.py
-    # model.apply(lambda m: initialize_weights(m, name='He'))
+    # model.apply(initialize_weights)
     print('Gum-Net model initialized!')
 
     # 4. Initialize hyperparameters and optimizer
     initial_lr = 1e-7
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.9 ** epoch)
     for param in model.parameters():
         param.requires_grad = True
 
@@ -89,6 +89,10 @@ def main(DEBUG=False):
             y_batch = y_batch.permute(0, 4, 1, 2, 3).to(device)
             mask_1_batch = mask_1_batch.permute(0, 4, 1, 2, 3).to(device)
             mask_2_batch = mask_2_batch.permute(0, 4, 1, 2, 3).to(device)
+            x_batch.requires_grad = True
+            y_batch.requires_grad = True
+            mask_1_batch.requires_grad = True
+            mask_2_batch.requires_grad = True
 
             optimizer.zero_grad()
             output, _ = model(x_batch, y_batch, mask_1_batch, mask_2_batch)
@@ -112,7 +116,7 @@ def main(DEBUG=False):
             optimizer.step()
             epoch_loss += loss.item()
 
-        scheduler.step(epoch_loss / len(dataloader))
+        scheduler.step()
         current_lr = scheduler.optimizer.param_groups[0]['lr']
         print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}. Current LR: {current_lr}')
 
@@ -128,4 +132,4 @@ def main(DEBUG=False):
     get_mrc_files(x_tensor, transformation_output)
 
 if __name__ == '__main__':
-    main(DEBUG=True)  # Set DEBUG=True to print weight gradient values to the terminal at runtime
+    main(DEBUG=False)  # Set DEBUG=True to print weight gradient values to the terminal at runtime
