@@ -68,7 +68,7 @@ def main(DEBUG=False):
     print('Gum-Net model initialized!')
 
     # 4. Initialize hyperparameters and optimizer
-    initial_lr = 1e-7
+    initial_lr = 5e-5
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.9 ** epoch)
     for param in model.parameters():
