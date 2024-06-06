@@ -9,11 +9,9 @@ class FeatureCorrelation(nn.Module):
     def __init__(self):
         super(FeatureCorrelation, self).__init__()
 
-    def forward(self, f_A, f_B):
-        b, c, l0, h0, w0 = f_A.size()
-        f_A = f_A.view(b, c, -1) # multiply spatial dims
-        f_B = f_B.view(b, c, -1)
-
-        # Compute and reshape correlation matrix between feature maps
-        corr = torch.matmul(f_A.transpose(1, 2), f_B)
-        return corr.view(b, l0, h0, w0, -1)
+    def forward(self, x, y):
+        b, c, d, h, w = x.size()
+        x = x.view(b, c, d * h * w).transpose(1, 2)
+        y = y.view(b, c, d * h * w)
+        correlation = torch.bmm(x, y)
+        return correlation.view(b, d, h, w, d * h * w)
