@@ -69,16 +69,17 @@ def correlation_coefficient_loss(y_true, y_pred):
     Returns:
     torch.Tensor: The computed loss.
     """
-    x = y_true
-    y = y_pred
-    mx = torch.mean(x, dim=(1, 2, 3, 4), keepdim=True)
-    my = torch.mean(y, dim=(1, 2, 3, 4), keepdim=True)
-    xm, ym = x - mx, y - my
-    r_num = torch.sum(xm * ym, dim=(1, 2, 3, 4))
-    r_den = torch.sqrt(torch.sum(xm**2, dim=(1, 2, 3, 4)) * torch.sum(ym**2, dim=(1, 2, 3, 4)))
-    r = r_num / (r_den + 1e-8)
-    r = torch.clamp(r, -1.0, 1.0)
-    return torch.mean(1 - r**2)
+    y_true_mean = torch.mean(y_true, dim=0)
+    y_pred_mean = torch.mean(y_pred, dim=0)
+    y_true_centered = y_true - y_true_mean
+    y_pred_centered = y_pred - y_pred_mean
+
+    covariance = torch.sum(y_true_centered * y_pred_centered, dim=0)
+    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=0))
+    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=0))
+
+    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
+    return 1 - correlation.mean()
 
 
 def alignment_eval(y_true, y_pred, image_size):
