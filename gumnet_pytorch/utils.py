@@ -69,14 +69,14 @@ def correlation_coefficient_loss(y_true, y_pred):
     Returns:
     torch.Tensor: The computed loss.
     """
-    y_true_mean = torch.mean(y_true, dim=0)
-    y_pred_mean = torch.mean(y_pred, dim=0)
+    y_true_mean = torch.mean(y_true)
+    y_pred_mean = torch.mean(y_pred)
     y_true_centered = y_true - y_true_mean
     y_pred_centered = y_pred - y_pred_mean
 
-    covariance = torch.sum(y_true_centered * y_pred_centered, dim=0)
-    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=0))
-    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=0))
+    covariance = torch.sum(y_true_centered * y_pred_centered)
+    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2))
+    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2))
 
     correlation = covariance / (y_true_std * y_pred_std + 1e-6)
     return 1 - correlation.mean()
