@@ -1,90 +1,76 @@
 import torch
 import numpy as np
-from models.gumnet_v2 import RigidTransformation3DImputation  # Adjust import path as necessary
+from models.gumnet_v2 import RigidTransformation3DImputation  
 
 def test_identity_transformation(device):
-    batches, channels, depth, height, width = 1, 1, 4, 4, 4
-    x = torch.randn(batches, channels, depth, height, width, device=device)
-    y = x.clone()
-    m1 = torch.ones(batches, channels, depth, height, width, device=device)
-    m2 = torch.zeros(batches, channels, depth, height, width, device=device)
-    theta = torch.zeros(batches, 6, device=device)
-
-    stn = RigidTransformation3DImputation((4, 4, 4))
-    output = stn(x, y, m1, m2, theta)
+    B, C, D, H, W = 1, 1, 4, 4, 4
+    x = torch.randn(B, C, D, H, W, device=device, requires_grad=True)
+    y = torch.randn(B, C, D, H, W, device=device, requires_grad=True)
+    m1 = torch.ones(B, C, D, H, W, device=device, requires_grad=True)
+    m2 = torch.zeros(B, C, D, H, W, device=device, requires_grad=True)
     
-    print("Input (sa):", x)
-    print("Output (out):", output)
+    identity_params = torch.full((B, 6), 0.5, device=device, requires_grad=True)
+    model = RigidTransformation3DImputation(output_size=(D, H, W)).to(device)
+    
+    output = model(x, y, m1, m2, identity_params)
+    
     assert torch.allclose(x, output, atol=1e-6), "Identity test failed!"
 
 def test_rotation_transformation(device):
-    sa = torch.tensor([[[[[0.8694, 0.3753, 0.6985, 0.9774],
-                           [0.4094, 0.9117, 0.0106, 0.8664],
-                           [0.3845, 0.5522, 0.3040, 0.0282],
-                           [0.6711, 0.5991, 0.2864, 0.8608]],
-
-                          [[0.1012, 0.5894, 0.3106, 0.9291],
-                           [0.4679, 0.7205, 0.3826, 0.3833],
-                           [0.7721, 0.1182, 0.4129, 0.3038],
-                           [0.6882, 0.7790, 0.2505, 0.6561]],
-
-                          [[0.7483, 0.9034, 0.6561, 0.0531],
-                           [0.4258, 0.3100, 0.1325, 0.5719],
-                           [0.8835, 0.7523, 0.8981, 0.8873],
-                           [0.4764, 0.1077, 0.6780, 0.5621]],
-
-                          [[0.9625, 0.5915, 0.7727, 0.0531],
-                           [0.7735, 0.8792, 0.5279, 0.5015],
-                           [0.2830, 0.9211, 0.1128, 0.9877],
-                           [0.1514, 0.1432, 0.2779, 0.7406]]]]], device=device)
-    sb = sa.clone().detach().to(device)
-    mask1 = torch.ones_like(sa).to(device)
-    mask2 = torch.zeros_like(sa).to(device)
-    rotation_params = torch.tensor([[0.5, 0.5, 0.5, 0., 0., 0.]]).to(device)
-    rotation_params[:, :3] = rotation_params[:, :3] * 2 * 3.141592653589793  # Scale to [0, 2*pi]
-
-    model = RigidTransformation3DImputation((4, 4, 4)).to(device)
-    out = model(sa, sb, mask1, mask2, rotation_params)
-
-    print("Input (sa):", sa)
-    print("Output (out):", out)
-    assert not torch.allclose(out, sa, atol=1e-5), "Rotation transformation did not change the input as expected"
+    B, C, D, H, W = 1, 1, 3, 3, 3
+    x = torch.tensor([[[[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                        [[10, 11, 12], [13, 14, 15], [16, 17, 18]],
+                        [[19, 20, 21], [22, 23, 24], [25, 26, 27]]]]], dtype=torch.float32, device=device, requires_grad=True)
+    y = torch.zeros_like(x, device=device, requires_grad=True)
+    m1 = torch.ones_like(x, device=device, requires_grad=True)
+    m2 = torch.zeros_like(x, device=device, requires_grad=True)
+    
+    rotation_90_x = torch.tensor([0.75, 0.5, 0.5], device=device, requires_grad=True)
+    translation_0 = torch.tensor([0.5, 0.5, 0.5], device=device, requires_grad=True)
+    rotation_params = torch.cat((rotation_90_x, translation_0)).unsqueeze(0).repeat(B, 1)
+    
+    model = RigidTransformation3DImputation(output_size=(D, H, W)).to(device)
+    
+    output = model(x, y, m1, m2, rotation_params)
+    
+    expected_output = torch.tensor([[[[[7, 4, 1], [8, 5, 2], [9, 6, 3]],
+                                      [[16, 13, 10], [17, 14, 11], [18, 15, 12]],
+                                      [[25, 22, 19], [26, 23, 20], [27, 24, 21]]]]], dtype=torch.float32, device=device)
+    
+    assert torch.allclose(output, expected_output, atol=1e-6), "Rotation test failed!"
 
 def test_translation_transformation(device):
-    sa = torch.tensor([[[[[0.8694, 0.3753, 0.6985, 0.9774],
-                           [0.4094, 0.9117, 0.0106, 0.8664],
-                           [0.3845, 0.5522, 0.3040, 0.0282],
-                           [0.6711, 0.5991, 0.2864, 0.8608]],
+    B, C, D, H, W = 1, 1, 3, 3, 3
+    x = torch.tensor([[[[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                        [[10, 11, 12], [13, 14, 15], [16, 17, 18]],
+                        [[19, 20, 21], [22, 23, 24], [25, 26, 27]]]]], dtype=torch.float32, device=device, requires_grad=True)
+    y = torch.zeros_like(x, device=device, requires_grad=True)
+    m1 = torch.ones_like(x, device=device, requires_grad=True)
+    m2 = torch.zeros_like(x, device=device, requires_grad=True)
+    
+    rotation_0 = torch.tensor([0.5, 0.5, 0.5], device=device, requires_grad=True)
+    translation_1_x = torch.tensor([1.0, 0.5, 0.5], device=device, requires_grad=True)
+    translation_params = torch.cat((rotation_0, translation_1_x)).unsqueeze(0).repeat(B, 1)
+    
+    model = RigidTransformation3DImputation(output_size=(D, H, W)).to(device)
+    
+    output = model(x, y, m1, m2, translation_params)
+    
+    expected_output = torch.tensor([[[[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                                      [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                                      [[10, 11, 12], [13, 14, 15], [16, 17, 18]]]]], dtype=torch.float32, device=device)
+    print("Expected:", expected_output)
+    print("Got:", output)
+    assert torch.allclose(output, expected_output, atol=1e-6), "Translation test failed!"
 
-                          [[0.1012, 0.5894, 0.3106, 0.9291],
-                           [0.4679, 0.7205, 0.3826, 0.3833],
-                           [0.7721, 0.1182, 0.4129, 0.3038],
-                           [0.6882, 0.7790, 0.2505, 0.6561]],
-
-                          [[0.7483, 0.9034, 0.6561, 0.0531],
-                           [0.4258, 0.3100, 0.1325, 0.5719],
-                           [0.8835, 0.7523, 0.8981, 0.8873],
-                           [0.4764, 0.1077, 0.6780, 0.5621]],
-
-                          [[0.9625, 0.5915, 0.7727, 0.0531],
-                           [0.7735, 0.8792, 0.5279, 0.5015],
-                           [0.2830, 0.9211, 0.1128, 0.9877],
-                           [0.1514, 0.1432, 0.2779, 0.7406]]]]], device=device)
-    sb = sa.clone().detach().to(device)
-    mask1 = torch.ones_like(sa).to(device)
-    mask2 = torch.zeros_like(sa).to(device)
-    translation_params = torch.tensor([[0., 0., 0., 0.5, 0.5, 0.5]]).to(device)
-    translation_params[:, 3:] = (translation_params[:, 3:] - 0.5) * 2  # Scale to [-1, 1]
-
-    model = RigidTransformation3DImputation((4, 4, 4)).to(device)
-    out = model(sa, sb, mask1, mask2, translation_params)
-
-    print("Input (sa):", sa)
-    print("Output (out):", out)
-    assert not torch.allclose(out, sa, atol=1e-5), "Translation transformation did not change the input as expected"
-
-if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print("\nTesting identity transform...")
     test_identity_transformation(device)
+    print("...passed!")
+    print("\nTesting rotation-only transform...")
     test_rotation_transformation(device)
+    print("...passed!")
+    print("\nTesting translation-only transform...")
     test_translation_transformation(device)
+    print("...passed!")
