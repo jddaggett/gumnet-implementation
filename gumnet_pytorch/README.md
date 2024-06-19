@@ -17,16 +17,13 @@ Zeng, Xiangrui, and Min Xu. "Gum-Net: Unsupervised Geometric Matching for Fast a
 
 
 ## Package versions
-* keras==2.2.4
-* tensorflow-gpu==1.12.0
-* h5py==2.10.0
+* torch==2.3.0
 
-
+## Note
+This version of the README is modified from the original in the aitom repo
 
 ## Installation 
-Please follow the installation guide of AITom. 
-
-Alternatively, you could download all the scripts in aitom.align.gum and modify the lines for importing modules to run Gum-Net independently. 
+No installations necessary for this version
 
 ## Demo
 
@@ -38,7 +35,7 @@ Masks of observed region and missing region in Fourier space are provided for im
 
 ### Trained model
 
-The [model](https://cmu.box.com/s/ymjit1ta5svqb8hyegwf5rqk2m46ouz7) is trained on the simulated dataset at SNR 100 from the paper.
+The model is trained by running train_demo.py
 
 ### Training code
 
@@ -51,8 +48,8 @@ python train_demo.py
 Output:
 
 ```
-Before finetuning:
-Rotation error:  1.3030150126200715 +/- 0.8484602493466796 Translation error:  5.723414606003282 +/- 3.9436690083966606 ----------
+Before Finetuning: 
+Rotation error:  1.6623960068954804 +/- 0.7343824644662732 Translation error:  8.788284627991649 +/- 3.3609601749211024 ----------
 
 Training Iteration 0
 ......
@@ -61,8 +58,8 @@ Training Iteration 0
 Training Iteration 19
 ......
 
-After finetuning:
-Rotation error:  1.0768166138653037 +/- 0.7477417154213482 Translation error:  3.5317874399013327 +/- 2.4426374023491872 ----------
+After Finetuing:
+Rotation error:  1.613769178833486 +/- 0.7337544707569074 Translation error:  0.8483087480267897 +/- 0.6085821785274531 ----------
 ```
 
 
