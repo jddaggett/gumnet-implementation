@@ -118,6 +118,9 @@ class RigidTransformation3DImputation(nn.Module):
         
         # Generate and sample affine grid to obtain transformed tensor
         grid = F.affine_grid(affine_matrix, x.size(), align_corners=False)
+
+        # From PyTorch docs: 
+        # "When mode='bilinear' and the input is 5-D, the interpolation mode used internally will actually be trilinear."
         x_t = F.grid_sample(x, grid, align_corners=False, mode='bilinear', padding_mode='zeros')
 
         return x_t
