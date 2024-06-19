@@ -83,12 +83,8 @@ def load_GroEL_ES():
     valid_y = F.grid_sample(valid_x, valid_grid, align_corners=False, mode='bilinear', padding_mode='zeros')
     test_y = F.grid_sample(test_x, test_grid, align_corners=False, mode='bilinear', padding_mode='zeros')
 
-    print(train_x.shape)
-    print(train_y.shape)
-    print(valid_x.shape)
-    print(valid_y.shape)
-    print(test_x.shape)
-    print(test_y.shape)
-    print(ground_truth.shape)
+    # Generate training data masks: @TODO these are placeholders
+    observed_mask = torch.ones(32, 32, 32).to(device).unsqueeze(0).unsqueeze(0).repeat(train_x.shape[0], 1, 1, 1, 1)
+    missing_mask = torch.zeros(32, 32, 32).to(device).unsqueeze(0).unsqueeze(0).repeat(train_x.shape[0], 1, 1, 1, 1)
 
-    return train_x, train_y, valid_x, valid_y, test_x, test_y, ground_truth
+    return train_x, train_y, valid_x, valid_y, test_x, test_y, observed_mask, missing_mask, ground_truth
