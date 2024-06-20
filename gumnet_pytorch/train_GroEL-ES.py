@@ -66,9 +66,8 @@ def main(DEBUG=False):
     for param in model.parameters():
         param.requires_grad = True
 
-    # @TODO Test masks are just placeholders right now
-    m1 = torch.ones(32, 32, 32).to(device).unsqueeze(0).unsqueeze(0).repeat(test_x.shape[0], 1, 1, 1, 1)
-    m2 = torch.zeros(32, 32, 32).to(device).unsqueeze(0).unsqueeze(0).repeat(test_x.shape[0], 1, 1, 1, 1)
+    # Generate missing wedge masks with a tilt angle of 25 degrees
+    m1, m2 = generate_masks(test_x, tilt_angle=25)
 
     # Test the model with the 'test' dataset
     y_pred, params = get_transformation_output_from_model(model, test_x, test_y, m1, m2, device)

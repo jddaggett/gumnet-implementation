@@ -66,8 +66,8 @@ def main(DEBUG=False):
     for param in model.parameters():
         param.requires_grad = True
 
-    # Generate masks with a tilt range of 60 degrees for a 30 degree missing wedge
-    m1, m2 = generate_masks(test_x, tilt_range=60)
+    # Generate masks with a tilt angle of 30 degrees
+    m1, m2 = generate_masks(test_x, tilt_angle=60)
 
     # Test the model with the 'test' dataset
     y_pred, params = get_transformation_output_from_model(model, test_x, test_y, m1, m2, device)
