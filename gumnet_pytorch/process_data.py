@@ -32,7 +32,7 @@ def euler_to_rot_matrix(theta):
     R = R.transpose(1, 2)
     return R 
 
-def generate_data(train_data, valid_data, test_data, tilt_range=60):
+def generate_data(train_data, valid_data, test_data, tilt_angle=60):
     # Convert data to torch tensors and reshape to [B, C, D, H, W]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_x = torch.tensor(train_data, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
@@ -69,7 +69,7 @@ def generate_data(train_data, valid_data, test_data, tilt_range=60):
     test_y = F.grid_sample(test_x, test_grid, align_corners=False, mode='bilinear', padding_mode='zeros')
 
     # Generate masks
-    observed_mask, missing_mask = generate_masks(train_x, tilt_range)
+    observed_mask, missing_mask = generate_masks(train_x, tilt_angle)
 
     return train_x, train_y, valid_x, valid_y, test_x, test_y, observed_mask, missing_mask, ground_truth
 
@@ -104,6 +104,3 @@ def load_rat_data():
         valid_data = pickle.load(f, encoding='latin1')
 
     return generate_data(train_data, valid_data, test_data)
-
-# Example usage for rat neuron culture dataset
-train_x, train_y, valid_x, valid_y, test_x, test_y, observed_mask, missing_mask, ground_truth = load_rat_data()
