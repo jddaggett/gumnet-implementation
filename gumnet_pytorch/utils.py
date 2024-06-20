@@ -5,40 +5,43 @@ import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
 
-# Generate a missing wedge mask for a given volume shape and tilt range
-def generate_missing_wedge_mask(volume_shape, tilt_range):
-    D, H, W = volume_shape
-    mask = np.ones(volume_shape, dtype=np.float32)
+def generate_masks(x, tilt_angle=30):
+    """
+    Generate a missing Fourier mask for a given subtomogram tensor, x, with a specified tilt angle.
+    
+    Parameters:
+        x (torch.Tensor): Input tensor of shape (batches, channels, depth, height, width)
+        tilt_angle (float): Maximum tilt angle in degrees (default is 30 degrees)
+        
+    Returns:
+        torch.Tensor: Missing Fourier mask of the same shape as the input tensor
+        torch.Tensor: Inverse of mask
+    """
+    # Get the shape of the tensor
+    batches, channels, depth, height, width = x.shape
 
-    tilt_rad = np.deg2rad(tilt_range)
-    max_y = np.tan(tilt_rad) * (D / 2)
+    # Calculate the missing wedge angles in radians
+    tilt_radians = np.radians(tilt_angle)
 
-    for z in range(D):
-        for y in range(H):
-            for x in range(W):
-                y_offset = y - H // 2
-                z_offset = z - D // 2
-                if abs(z_offset) > max_y:
-                    mask[z, y, x] = 0
+    # Create a meshgrid for the Fourier space coordinates
+    kz = np.fft.fftfreq(depth)
+    ky = np.fft.fftfreq(height)
+    kx = np.fft.fftfreq(width)
 
-    return mask
+    KZ, KY, KX = np.meshgrid(kz, ky, kx, indexing='ij')
 
-# Expand a single 3D mask to match the batch size and number of channels
-def expand_mask_to_batch(mask, batch_size, channels, device):
-    expanded_mask = torch.tensor(mask, dtype=torch.float32).to(device)
-    expanded_mask = expanded_mask.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
-    expanded_mask = expanded_mask.repeat(batch_size, channels, 1, 1, 1)  # Repeat for batch and channels
-    return expanded_mask
+    # Calculate the angles for the Fourier space coordinates
+    angles = np.abs(np.arcsin(KZ))
 
-def generate_masks(x, tilt_range=60):
-    B, C, D, H, W = x.shape
-    observed_mask_np = generate_missing_wedge_mask((D, H, W), tilt_range)
-    missing_mask_np = 1 - observed_mask_np
+    # Create the missing wedge mask
+    mask = np.ones((depth, height, width), dtype=np.float32)
+    mask[angles > tilt_radians] = 0
 
-    observed_mask = expand_mask_to_batch(observed_mask_np, x.shape[0], x.shape[1], x.device)
-    missing_mask = expand_mask_to_batch(missing_mask_np, x.shape[0], x.shape[1], x.device)
-
-    return observed_mask, missing_mask
+    # Expand the mask to match the input tensor shape
+    mask = torch.tensor(mask, dtype=x.dtype, device=x.device)
+    mask = mask.unsqueeze(0).unsqueeze(0).expand(batches, channels, depth, height, width)
+    
+    return mask, 1 - mask
 
 # Data augmentation to prevent overfitting
 def augment_data(x, y):
