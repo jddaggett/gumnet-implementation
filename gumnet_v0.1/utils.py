@@ -96,30 +96,6 @@ def initialize_weights(module, name='He'):
             nn.init.constant_(module.bias, 0)
 
 
-def correlation_coefficient_loss(y_true, y_pred):
-    """
-    Computes the correlation coefficient loss between y_true and y_pred.
-
-    Parameters:
-    y_true (torch.Tensor): Ground truth tensor.
-    y_pred (torch.Tensor): Predicted tensor.
-
-    Returns:
-    torch.Tensor: The computed loss.
-    """
-    y_true_mean = torch.mean(y_true, dim=[2, 3, 4], keepdim=True)
-    y_pred_mean = torch.mean(y_pred, dim=[2, 3, 4], keepdim=True)
-    y_true_centered = y_true - y_true_mean
-    y_pred_centered = y_pred - y_pred_mean
-
-    covariance = torch.sum(y_true_centered * y_pred_centered, dim=[2, 3, 4])
-    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=[2, 3, 4]))
-    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=[2, 3, 4]))
-
-    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
-    return 1 - correlation.mean()
-
-
 # For debugging purposes only with [batches, 6] shaped input
 def correlation_coefficient_loss_params(y_true, y_pred):
     y_true_mean = torch.mean(y_true, dim=1, keepdim=True)
