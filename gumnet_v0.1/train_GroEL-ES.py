@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import pickle
-from models.gumnet_v2 import GumNet
+from models.gumnet import GumNet
 from utils import *
 from process_data import load_GroEL_ES
 
