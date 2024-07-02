@@ -68,10 +68,7 @@ def generate_data(train_data, valid_data, test_data, tilt_angle=60):
     valid_y = F.grid_sample(valid_x, valid_grid, align_corners=False, mode='bilinear', padding_mode='zeros')
     test_y = F.grid_sample(test_x, test_grid, align_corners=False, mode='bilinear', padding_mode='zeros')
 
-    # Generate masks
-    observed_mask, missing_mask = generate_masks(train_x, tilt_angle)
-
-    return train_x, train_y, valid_x, valid_y, test_x, test_y, observed_mask, missing_mask, ground_truth
+    return train_x, train_y, valid_x, valid_y, test_x, test_y, ground_truth
 
 # Generates usable torch data from the GroEL-ES dataset
 def load_GroEL_ES():
