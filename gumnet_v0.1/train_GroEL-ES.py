@@ -10,7 +10,7 @@ from process_data import load_GroEL_ES
 
 torch.autograd.set_detect_anomaly(True)
 
-def get_transformation_output_from_model(model, x_test, y_test, device, batch_size=32):
+def get_transformation_output_from_model(model, x_test, y_test, batch_size=32):
     model.eval()
     with torch.no_grad():
         y_preds = []
@@ -26,9 +26,9 @@ def get_transformation_output_from_model(model, x_test, y_test, device, batch_si
     params = torch.cat(params_list, dim=0)
     return params.detach().cpu().numpy()
 
-def create_dataloaders(x, y, gt, batch_size):
+def create_dataloaders(x, y, gt, device, batch_size):
     # Creates a shuffled dataloader for input, target, and ground truth parameters
-    dataloader = DataLoader(TensorDataset(x, y, gt), batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(TensorDataset(x.to(device), y.to(device), gt.to(device)), batch_size=batch_size, shuffle=True)
     return dataloader
 
 def main(DEBUG=False, batch_size=32, initial_lr=1e-7):
@@ -45,7 +45,7 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-7):
     test_y = (test_y - test_y.mean()) / test_y.std() 
 
     # @TODO generate ground truth for the train dataset. For now, using test dataset.
-    dataloader = create_dataloaders(test_x, test_y, ground_truth, batch_size=batch_size)
+    dataloader = create_dataloaders(test_x, test_y, ground_truth, device, batch_size)
     print('Data successfully loaded!')
 
     # Initialize the model on the GPU
@@ -61,7 +61,7 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-7):
         param.requires_grad = True
 
     # Test the model with the 'test' dataset
-    y_pred, params = get_transformation_output_from_model(model, test_x, test_y, device)
+    params = get_transformation_output_from_model(model, test_x, test_y)
     print('Evaluation (no fine-tuning):')
     alignment_eval(ground_truth, params, test_x.shape[2])
 
@@ -97,7 +97,7 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-7):
         print(f'Epoch {i + 1} complete. Average Loss: {epoch_loss / len(dataloader)}. Current LR: {current_lr}')
 
     # After training, test model again with the test dataset
-    y_pred, params = get_transformation_output_from_model(model, test_x, test_y, device)
+    params = get_transformation_output_from_model(model, test_x, test_y)
     print('After finetuning:')
     alignment_eval(ground_truth, params, test_x.shape[2])
 
