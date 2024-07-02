@@ -5,44 +5,6 @@ import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
 
-def generate_masks(x, tilt_angle=30):
-    """
-    Generate a missing Fourier mask for a given subtomogram tensor, x, with a specified tilt angle.
-    
-    Parameters:
-        x (torch.Tensor): Input tensor of shape (batches, channels, depth, height, width)
-        tilt_angle (float): Maximum tilt angle in degrees (default is 30 degrees)
-        
-    Returns:
-        torch.Tensor: Missing Fourier mask of the same shape as the input tensor
-        torch.Tensor: Inverse of mask
-    """
-    # Get the shape of the tensor
-    batches, channels, depth, height, width = x.shape
-
-    # Calculate the missing wedge angles in radians
-    tilt_radians = np.radians(tilt_angle)
-
-    # Create a meshgrid for the Fourier space coordinates
-    kz = np.fft.fftfreq(depth)
-    ky = np.fft.fftfreq(height)
-    kx = np.fft.fftfreq(width)
-
-    KZ, KY, KX = np.meshgrid(kz, ky, kx, indexing='ij')
-
-    # Calculate the angles for the Fourier space coordinates
-    angles = np.abs(np.arcsin(KZ))
-
-    # Create the missing wedge mask
-    mask = np.ones((depth, height, width), dtype=np.float32)
-    mask[angles > tilt_radians] = 0
-
-    # Expand the mask to match the input tensor shape
-    mask = torch.tensor(mask, dtype=x.dtype, device=x.device)
-    mask = mask.unsqueeze(0).unsqueeze(0).expand(batches, channels, depth, height, width)
-    
-    return mask, 1 - mask
-
 # Data augmentation to prevent overfitting
 def augment_data(x, y):
     """
