@@ -44,7 +44,7 @@ def create_dataloaders(x_test, y_test, observed_mask, missing_mask, ground_truth
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return dataloader
 
-def main(DEBUG=False):
+def main(DEBUG=False, initial_lr=1e-7, USE_STN=True, AUGMENT=False, batch_size=32):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
@@ -53,10 +53,11 @@ def main(DEBUG=False):
         x_test, y_test, observed_mask, missing_mask, ground_truth = pickle.load(f, encoding='latin1')
     
     # 2. Augment and normalize data then create dataloader for batches
-    x_test, y_test = augment_data(x_test, y_test)
+    if AUGMENT: 
+        x_test, y_test = augment_data(x_test, y_test)
     x_test = (x_test - np.mean(x_test)) / np.std(x_test)
     y_test = (y_test - np.mean(y_test)) / np.std(y_test)
-    dataloader = create_dataloaders(x_test, y_test, observed_mask, missing_mask, ground_truth, batch_size=32)
+    dataloader = create_dataloaders(x_test, y_test, observed_mask, missing_mask, ground_truth, batch_size=batch_size)
     print('Data successfully loaded!')
 
     # 3. Initialize model and weights
@@ -67,7 +68,6 @@ def main(DEBUG=False):
     print('Gum-Net model initialized!')
 
     # 4. Initialize hyperparameters and optimizer
-    initial_lr = 1e-4
     optimizer = optim.Adam(model.parameters(), lr=initial_lr)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.9 ** epoch)
     for param in model.parameters():
@@ -77,6 +77,7 @@ def main(DEBUG=False):
     y_pred, params = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device)
     print('Evaluation (no fine-tuning):')
     alignment_eval(ground_truth, params, x_test.shape[2])
+    print('Cross-correlation: ', compute_cross_correlation(torch.tensor(y_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device), y_pred))
 
     # 6. Fine-tune the model for 20 iterations
     model.train()
@@ -92,7 +93,10 @@ def main(DEBUG=False):
 
             optimizer.zero_grad()
             y_pred, params = model(x_batch, y_batch, mask_1_batch, mask_2_batch)
-            loss = correlation_coefficient_loss(gt_batch, params)
+            if USE_STN:
+                loss = correlation_coefficient_loss(y_batch, y_pred)
+            else:
+                loss = correlation_coefficient_loss_params(gt_batch, params)
 
             # Check for NaNs in loss
             if torch.isnan(loss).any():
@@ -121,11 +125,7 @@ def main(DEBUG=False):
     y_pred, params = get_transformation_output_from_model(model, x_test, y_test, observed_mask, missing_mask, device)
     print('After finetuning:')
     alignment_eval(ground_truth, params, x_test.shape[2])
-
-    # 8. Visualize results
-    # x_tensor = torch.tensor(x_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
-    # visualize_2d_slice(x_tensor.cpu(), y_pred)
-    # get_mrc_files(x_tensor, y_pred)
+    print('Cross-correlation: ', compute_cross_correlation(torch.tensor(y_test, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device), y_pred))
 
 if __name__ == '__main__':
-    main(DEBUG=False)  # Set DEBUG=True to print weight gradient values to the terminal at runtime
+    main(DEBUG=False, initial_lr=1e-4, USE_STN=True, AUGMENT=True, batch_size=32)
