@@ -1,9 +1,40 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
+
+class CombinedLoss(nn.Module):
+    def __init__(self, alpha=0.5):
+        super(CombinedLoss, self).__init__()
+        self.alpha = alpha
+
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor):
+        # Compute MSE Loss
+        rotation_mse = F.mse_loss(y_pred[:, :3], y_true[:, :3], reduction='mean')
+        translation_mse = F.mse_loss(y_pred[:, 3:], y_true[:, 3:], reduction='mean')
+        mse_loss = rotation_mse + translation_mse
+
+        # Compute Correlation Coefficient Loss
+        y_true_mean = torch.mean(y_true, dim=1, keepdim=True)
+        y_pred_mean = torch.mean(y_pred, dim=1, keepdim=True)
+        y_true_centered = y_true - y_true_mean
+        y_pred_centered = y_pred - y_pred_mean
+
+        covariance = torch.sum(y_true_centered * y_pred_centered, dim=1)
+        y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=1))
+        y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=1))
+
+        correlation = covariance / (y_true_std * y_pred_std + 1e-6)
+        correlation_loss = 1 - correlation.mean()
+
+        # Combine the losses
+        total_loss = self.alpha * mse_loss + (1 - self.alpha) * correlation_loss
+
+        return total_loss
+
 
 # Data augmentation to prevent overfitting
 def augment_data(x, y):
@@ -58,6 +89,22 @@ def initialize_weights(module, name='He'):
             nn.init.constant_(module.bias, 0)
 
 
+def compute_transformation_accuracy(ground_truth, predicted):
+    assert predicted.size() == torch.Size([100, 6])
+    assert ground_truth.size() == torch.Size([100, 6])
+    
+    # Split the tensors into rotation and translation components
+    pred_rotation = predicted[:, :3]
+    pred_translation = predicted[:, 3:]
+    gt_rotation = ground_truth[:, :3]
+    gt_translation = ground_truth[:, 3:]
+
+    # Compute the mean squared error for rotation and translation
+    rotation_mse = F.mse_loss(pred_rotation, gt_rotation, reduction='mean')
+    translation_mse = F.mse_loss(pred_translation, gt_translation, reduction='mean')
+
+    return rotation_mse.item(), translation_mse.item()
+
 # For debugging purposes only with [batches, 6] shaped input
 def correlation_coefficient_loss_params(y_true, y_pred):
     y_true_mean = torch.mean(y_true, dim=1, keepdim=True)
@@ -71,6 +118,32 @@ def correlation_coefficient_loss_params(y_true, y_pred):
 
     correlation = covariance / (y_true_std * y_pred_std + 1e-6)
     return 1 - correlation.mean()
+
+
+def alignment_eval_no_scale(y_true, y_pred, image_size):
+    """
+    Evaluates the alignment of y_pred against y_true.
+
+    Parameters:
+    y_true (numpy array): Ground truth transformation parameters.
+    y_pred (numpy array): Predicted transformation parameters.
+    image_size (int): The size of the image.
+
+    """
+    ang_d = []
+    loc_d = []
+
+    for i in range(len(y_true)):
+        a = angle_zyz_difference(ang1=y_true[i][:3],
+                                 ang2=y_pred[i][:3])
+        b = np.linalg.norm(
+            np.round(y_true[i][3:6]) -
+            np.round((y_pred[i][3:6])))
+        ang_d.append(a)
+        loc_d.append(b)
+
+    print('Rotation error: ', np.mean(ang_d), '+/-', np.std(ang_d),
+          'Translation error: ', np.mean(loc_d), '+/-', np.std(loc_d), '----------')
 
 
 def alignment_eval(y_true, y_pred, image_size):

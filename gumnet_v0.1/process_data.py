@@ -34,7 +34,7 @@ def euler_to_rot_matrix(theta):
 
 def generate_data(train_data, valid_data, test_data, tilt_angle=60):
     # Convert data to torch tensors and reshape to [B, C, D, H, W]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:4' if torch.cuda.is_available() else 'cpu')
     train_x = torch.tensor(train_data, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
     valid_x = torch.tensor(valid_data, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)
     test_x = torch.tensor(test_data, dtype=torch.float32).permute(0, 4, 1, 2, 3).to(device)

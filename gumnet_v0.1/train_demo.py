@@ -32,7 +32,7 @@ def create_dataloaders(x_test, y_test, ground_truth, batch_size):
     return dataloader
 
 def main(DEBUG=False, batch_size=32, initial_lr=1e-4, AUGMENT=False, random_initialization=True):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:4' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
     # 1. Load the train data
@@ -66,9 +66,12 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-4, AUGMENT=False, random_init
     params = get_transformation_output_from_model(model, x_test, y_test, device, batch_size)
     print('Evaluation (no fine-tuning):')
     alignment_eval(ground_truth, params, x_test.shape[2])
+    print(compute_transformation_accuracy(torch.tensor(ground_truth, dtype=torch.float32).to(device), 
+                                          torch.tensor(params, dtype=torch.float32).to(device)))
 
     # 6. Fine-tune the model for 20 iterations
     model.train()
+    loss_fn = CombinedLoss(alpha=0)
     for i in range(20):
         print('Training Iteration ' + str(i+1))
         epoch_loss = 0
@@ -81,7 +84,7 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-4, AUGMENT=False, random_init
             params = model(x_batch, y_batch)
 
             # calculate loss directly with 6D transformation parameters
-            loss = correlation_coefficient_loss_params(gt_batch, params)
+            loss = loss_fn(params, gt_batch)
 
             # Check for NaNs in loss
             if torch.isnan(loss).any():
@@ -110,6 +113,8 @@ def main(DEBUG=False, batch_size=32, initial_lr=1e-4, AUGMENT=False, random_init
     params = get_transformation_output_from_model(model, x_test, y_test, device, batch_size)
     print('After finetuning:')
     alignment_eval(ground_truth, params, x_test.shape[2])
+    print(compute_transformation_accuracy(torch.tensor(ground_truth, dtype=torch.float32).to(device), 
+                                          torch.tensor(params, dtype=torch.float32).to(device)))
 
 if __name__ == '__main__':
     main(DEBUG=False, batch_size=32, initial_lr=1e-4, AUGMENT=False, random_initialization=True)
