@@ -117,8 +117,6 @@ class GumNet(nn.Module):
         c = self.relu(c)
         c = self.sigmoid(self.fc3(c))
 
-        # @TODO transformation network causing training errors, for now 
-        # I am just training with the predicted parameters 'c'
-        #sb_hat = self.rigid_transform(sa, sb, mask1, mask2, c)
+        sb_hat = self.rigid_transform(sa, sb, mask1, mask2, c)
 
-        return sb, c
+        return sb_hat, c
