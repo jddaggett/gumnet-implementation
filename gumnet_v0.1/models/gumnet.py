@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from models.layers.FeatureCorrelation import FeatureCorrelation
 from models.layers.FeatureL2Norm import FeatureL2Norm
+from models.layers.STN import STN
 from models.layers.SpectralPooling import SpectralPooling
 
 class GumNet(nn.Module):
@@ -48,6 +49,8 @@ class GumNet(nn.Module):
         self.fc3 = nn.Linear(2000, 6)
 
         self.sigmoid = nn.Sigmoid()
+
+        self.STN = STN()
 
     def forward(self, sa, sb):
         def feature_extractor(x):
@@ -114,4 +117,7 @@ class GumNet(nn.Module):
         c = self.relu(c)
         c = self.sigmoid(self.fc3(c))
 
-        return c
+        # Transform sa using basic STN
+        sb_hat = self.STN(sa, c)
+
+        return sb_hat, c

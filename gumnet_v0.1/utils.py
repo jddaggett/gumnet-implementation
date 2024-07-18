@@ -5,38 +5,102 @@ import torch.nn.functional as F
 import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
+from torch.distributions import Normal
 
-class CombinedLoss(nn.Module):
-    def __init__(self, alpha=0.5):
-        super(CombinedLoss, self).__init__()
-        self.alpha = alpha
+def rotate_tensor(tensor, angle, axes, device):
+    """
+    Rotates a 5D tensor along the specified axes.
+    """
+    # Convert angle to radians
+    angle = torch.tensor(angle, device=device).float() * torch.pi / 180.0
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        # Compute MSE Loss
-        rotation_mse = F.mse_loss(y_pred[:, :3], y_true[:, :3], reduction='mean')
-        translation_mse = F.mse_loss(y_pred[:, 3:], y_true[:, 3:], reduction='mean')
-        mse_loss = rotation_mse + translation_mse
+    # Create an identity affine transformation matrix
+    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
 
-        # Compute Correlation Coefficient Loss
-        y_true_mean = torch.mean(y_true, dim=1, keepdim=True)
-        y_pred_mean = torch.mean(y_pred, dim=1, keepdim=True)
-        y_true_centered = y_true - y_true_mean
-        y_pred_centered = y_pred - y_pred_mean
+    # Rotation around x-axis
+    if axes == (1, 2):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 1, 1] = cos_angle
+        affine_matrix[:, 1, 2] = -sin_angle
+        affine_matrix[:, 2, 1] = sin_angle
+        affine_matrix[:, 2, 2] = cos_angle
+    # Rotation around y-axis
+    elif axes == (2, 3):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 0, 0] = cos_angle
+        affine_matrix[:, 0, 2] = sin_angle
+        affine_matrix[:, 2, 0] = -sin_angle
+        affine_matrix[:, 2, 2] = cos_angle
+    # Rotation around z-axis
+    elif axes == (1, 3):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 0, 0] = cos_angle
+        affine_matrix[:, 0, 1] = -sin_angle
+        affine_matrix[:, 1, 0] = sin_angle
+        affine_matrix[:, 1, 1] = cos_angle
 
-        covariance = torch.sum(y_true_centered * y_pred_centered, dim=1)
-        y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=1))
-        y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=1))
+    # Apply affine transformation
+    affine_matrix = affine_matrix[:, :3, :]
+    grid = F.affine_grid(affine_matrix, tensor.size(), align_corners=False)
+    tensor = F.grid_sample(tensor, grid, align_corners=False)
+    return tensor
 
-        correlation = covariance / (y_true_std * y_pred_std + 1e-6)
-        correlation_loss = 1 - correlation.mean()
+def shift_tensor(tensor, shift, device):
+    """
+    Shifts a 5D tensor along the specified axes.
+    """
+    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
+    affine_matrix[:, :3, 3] = torch.tensor(shift, device=device).float().unsqueeze(0)
 
-        # Combine the losses
-        total_loss = self.alpha * mse_loss + (1 - self.alpha) * correlation_loss
+    grid = F.affine_grid(affine_matrix[:, :3, :], tensor.size(), align_corners=False)
+    tensor = F.grid_sample(tensor, grid, align_corners=False)
+    return tensor
 
-        return total_loss
+def augment_tensors(x, y, device):
+    """
+    Applies random rotations and translations to the data to prevent overfitting.
+
+    Parameters:
+    x (torch.Tensor): Input data for x.
+    y (torch.Tensor): Input data for y.
+
+    Returns:
+    tuple: Augmented x and y.
+    """
+    # Randomly rotate
+    angle_x = torch.FloatTensor(1).uniform_(-10, 10).item()
+    angle_y = torch.FloatTensor(1).uniform_(-10, 10).item()
+    angle_z = torch.FloatTensor(1).uniform_(-10, 10).item()
+    
+    x = rotate_tensor(x, angle_x, axes=(1, 2), device=device)
+    x = rotate_tensor(x, angle_y, axes=(2, 3), device=device)
+    x = rotate_tensor(x, angle_z, axes=(1, 3), device=device)
+    y = rotate_tensor(y, angle_x, axes=(1, 2), device=device)
+    y = rotate_tensor(y, angle_y, axes=(2, 3), device=device)
+    y = rotate_tensor(y, angle_z, axes=(1, 3), device=device)
+
+    # Randomly translate
+    translate_x = torch.FloatTensor(1).uniform_(-5, 5).item()
+    translate_y = torch.FloatTensor(1).uniform_(-5, 5).item()
+    translate_z = torch.FloatTensor(1).uniform_(-5, 5).item()
+    x = shift_tensor(x, (translate_x, translate_y, translate_z), device)
+    y = shift_tensor(y, (translate_x, translate_y, translate_z), device)
+
+    # Add random noise
+    noise_x = Normal(0, 0.01).sample(x.size()).to(device)
+    noise_y = Normal(0, 0.01).sample(y.size()).to(device)
+    x += noise_x
+    y += noise_y
+
+    return x, y
 
 
 # Data augmentation to prevent overfitting
+# Important to note that the same rigid transformations are applied
+# to both x and y, hence the ground truth difference remains the same
 def augment_data(x, y):
     """
     Applies random rotations and translations to the data to prevent overfitting.
@@ -65,6 +129,11 @@ def augment_data(x, y):
     translate_z = np.random.uniform(-5, 5)
     x = shift(x, (0, translate_x, translate_y, translate_z, 0), order=1)
     y = shift(y, (0, translate_x, translate_y, translate_z, 0), order=1)
+
+    # Random noise
+    noise = np.random.normal(0, 0.01, x.shape)
+    x += noise
+    y += noise
 
     return x, y
 
@@ -104,6 +173,19 @@ def compute_transformation_accuracy(ground_truth, predicted):
     translation_mse = F.mse_loss(pred_translation, gt_translation, reduction='mean')
 
     return rotation_mse.item(), translation_mse.item()
+
+def correlation_coefficient_loss(y_true, y_pred):
+    y_true_mean = torch.mean(y_true, dim=[2, 3, 4], keepdim=True)
+    y_pred_mean = torch.mean(y_pred, dim=[2, 3, 4], keepdim=True)
+    y_true_centered = y_true - y_true_mean
+    y_pred_centered = y_pred - y_pred_mean
+
+    covariance = torch.sum(y_true_centered * y_pred_centered, dim=[2, 3, 4])
+    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=[2, 3, 4]))
+    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=[2, 3, 4]))
+
+    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
+    return 1 - correlation.mean()
 
 # For debugging purposes only with [batches, 6] shaped input
 def correlation_coefficient_loss_params(y_true, y_pred):
