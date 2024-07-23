@@ -4,6 +4,98 @@ import torch.nn as nn
 import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
+from scipy.ndimage import rotate, shift
+from torch.distributions import Normal
+
+def rotate_tensor(tensor, angle, axes, device):
+    """
+    Rotates a 5D tensor along the specified axes.
+    """
+    # Convert angle to radians
+    angle = torch.tensor(angle, device=device).float() * torch.pi / 180.0
+
+    # Create an identity affine transformation matrix
+    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
+
+    # Rotation around x-axis
+    if axes == (1, 2):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 1, 1] = cos_angle
+        affine_matrix[:, 1, 2] = -sin_angle
+        affine_matrix[:, 2, 1] = sin_angle
+        affine_matrix[:, 2, 2] = cos_angle
+    # Rotation around y-axis
+    elif axes == (2, 3):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 0, 0] = cos_angle
+        affine_matrix[:, 0, 2] = sin_angle
+        affine_matrix[:, 2, 0] = -sin_angle
+        affine_matrix[:, 2, 2] = cos_angle
+    # Rotation around z-axis
+    elif axes == (1, 3):
+        cos_angle = torch.cos(angle)
+        sin_angle = torch.sin(angle)
+        affine_matrix[:, 0, 0] = cos_angle
+        affine_matrix[:, 0, 1] = -sin_angle
+        affine_matrix[:, 1, 0] = sin_angle
+        affine_matrix[:, 1, 1] = cos_angle
+
+    # Apply affine transformation
+    affine_matrix = affine_matrix[:, :3, :]
+    grid = F.affine_grid(affine_matrix, tensor.size(), align_corners=False)
+    tensor = F.grid_sample(tensor, grid, align_corners=False)
+    return tensor
+
+def shift_tensor(tensor, shift, device):
+    """
+    Shifts a 5D tensor along the specified axes.
+    """
+    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
+    affine_matrix[:, :3, 3] = torch.tensor(shift, device=device).float().unsqueeze(0)
+
+    grid = F.affine_grid(affine_matrix[:, :3, :], tensor.size(), align_corners=False)
+    tensor = F.grid_sample(tensor, grid, align_corners=False)
+    return tensor
+
+def augment_tensors(x, y, device):
+    """
+    Applies random rotations and translations to the data to prevent overfitting.
+
+    Parameters:
+    x (torch.Tensor): Input data for x.
+    y (torch.Tensor): Input data for y.
+
+    Returns:
+    tuple: Augmented x and y.
+    """
+    # Randomly rotate
+    angle_x = torch.FloatTensor(1).uniform_(-10, 10).item()
+    angle_y = torch.FloatTensor(1).uniform_(-10, 10).item()
+    angle_z = torch.FloatTensor(1).uniform_(-10, 10).item()
+    
+    x = rotate_tensor(x, angle_x, axes=(1, 2), device=device)
+    x = rotate_tensor(x, angle_y, axes=(2, 3), device=device)
+    x = rotate_tensor(x, angle_z, axes=(1, 3), device=device)
+    y = rotate_tensor(y, angle_x, axes=(1, 2), device=device)
+    y = rotate_tensor(y, angle_y, axes=(2, 3), device=device)
+    y = rotate_tensor(y, angle_z, axes=(1, 3), device=device)
+
+    # Randomly translate
+    translate_x = torch.FloatTensor(1).uniform_(-5, 5).item()
+    translate_y = torch.FloatTensor(1).uniform_(-5, 5).item()
+    translate_z = torch.FloatTensor(1).uniform_(-5, 5).item()
+    x = shift_tensor(x, (translate_x, translate_y, translate_z), device)
+    y = shift_tensor(y, (translate_x, translate_y, translate_z), device)
+
+    # Add random noise
+    noise_x = Normal(0, 0.01).sample(x.size()).to(device)
+    noise_y = Normal(0, 0.01).sample(y.size()).to(device)
+    x += noise_x
+    y += noise_y
+
+    return x, y
 
 def generate_masks(x, tilt_angle=30):
     """
@@ -119,8 +211,41 @@ def correlation_coefficient_loss(y_true, y_pred):
     correlation = covariance / (y_true_std * y_pred_std + 1e-6)
     return 1 - correlation.mean()
 
+# For debugging purposes only with [batches, 6] shaped input
+def correlation_coefficient_loss_params(y_true, y_pred):
+    x = y_true
+    y = y_pred
+    mx = torch.mean(x, dim=1, keepdim=True)
+    my = torch.mean(y, dim=1, keepdim=True)
+    xm, ym = x - mx, y - my
+    r_num = torch.sum(xm * ym, dim=1)
+    r_den = torch.sqrt(torch.sum(xm**2, dim=1) * torch.sum(ym**2, dim=1))
+    r = r_num / (r_den + 1e-8)
+    r = torch.clamp(r, -1.0, 1.0)
+    return torch.mean(1 - r**2)
 
-def alignment_eval(y_true, y_pred, image_size):
+
+def compute_cross_correlation(x, y):
+    """
+    Compute the cross-correlation between two subtomograms x and y.
+    """
+    # Mean-center the subtomograms
+    x = x - x.mean(dim=[2, 3, 4], keepdim=True)
+    y = y - y.mean(dim=[2, 3, 4], keepdim=True)
+    
+    # Compute cross-correlation
+    cross_correlation = torch.sum(x * y, dim=[2, 3, 4])
+    
+    # Normalize by the norms of x and y
+    norm_x = torch.sqrt(torch.sum(x ** 2, dim=[2, 3, 4]))
+    norm_y = torch.sqrt(torch.sum(y ** 2, dim=[2, 3, 4]))
+    
+    cross_correlation /= (norm_x * norm_y + 1e-8)  # Add epsilon to avoid division by zero
+    
+    return cross_correlation.mean()
+
+
+def alignment_eval(y_true, y_pred, image_size, scale=True):
     """
     Evaluates the alignment of y_pred against y_true.
 
@@ -128,17 +253,25 @@ def alignment_eval(y_true, y_pred, image_size):
     y_true (numpy array): Ground truth transformation parameters.
     y_pred (numpy array): Predicted transformation parameters.
     image_size (int): The size of the image.
+    scale (bool): True if the input must be rescaled from [0,1] to [-1,1]
 
     """
     ang_d = []
     loc_d = []
 
     for i in range(len(y_true)):
-        a = angle_zyz_difference(ang1=y_true[i][:3],
-                                 ang2=y_pred[i][:3] * 2 * np.pi - np.pi)
-        b = np.linalg.norm(
-            np.round(y_true[i][3:6]) -
-            np.round((y_pred[i][3:6] * 2 - 1) * (image_size / 2)))
+        if scale:
+            a = angle_zyz_difference(ang1=y_true[i][:3],
+                                     ang2=y_pred[i][:3] * 2 * np.pi - np.pi)
+            b = np.linalg.norm(
+                np.round(y_true[i][3:6]) -
+                np.round((y_pred[i][3:6] * 2 - 1) * (image_size / 2)))
+        else:
+            a = angle_zyz_difference(ang1=y_true[i][:3],
+                                     ang2=y_pred[i][:3])
+            b = np.linalg.norm(
+                np.round(y_true[i][3:6]) -
+                np.round((y_pred[i][3:6])))
         ang_d.append(a)
         loc_d.append(b)
 

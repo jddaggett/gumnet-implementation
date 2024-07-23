@@ -45,7 +45,7 @@ def create_dataloaders(x_test, y_test, observed_mask, missing_mask, ground_truth
     return dataloader
 
 def main(DEBUG=False, initial_lr=1e-7, USE_STN=True, AUGMENT=False, batch_size=32):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:4' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
     # 1. Load the train data
