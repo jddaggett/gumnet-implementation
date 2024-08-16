@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class FeatureCorrelation(nn.Module):
     """
@@ -10,10 +11,7 @@ class FeatureCorrelation(nn.Module):
 
     def forward(self, x, y):
         b, c, d, h, w = x.size()
-
         x = x.view(b, c, d * h * w).transpose(1, 2)
-        y = y.view(b, c, d * h * w)  
-
+        y = y.view(b, c, d * h * w)
         correlation = torch.bmm(x, y)
-
         return correlation.view(b, d, h, w, d * h * w)

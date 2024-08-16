@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from models.layers.FeatureCorrelation import FeatureCorrelation
 from models.layers.FeatureL2Norm import FeatureL2Norm
-from models.layers.STN import STN
+from models.layers.RigidTransformation3DImputation import RigidTransformation3DImputation
 from models.layers.SpectralPooling import SpectralPooling
 
 class GumNet(nn.Module):
@@ -50,9 +50,9 @@ class GumNet(nn.Module):
 
         self.sigmoid = nn.Sigmoid()
 
-        self.STN = STN()
+        self.rigid_transform = RigidTransformation3DImputation(output_size=(32, 32, 32))
 
-    def forward(self, sa, sb):
+    def forward(self, sa, sb, mask1, mask2):
         def feature_extractor(x):
             x = self.shared_conv1(x)
             x = self.relu(x)
@@ -117,7 +117,8 @@ class GumNet(nn.Module):
         c = self.relu(c)
         c = self.sigmoid(self.fc3(c))
 
-        # Transform sa using basic STN
-        sb_hat = self.STN(sa, c)
+        # @TODO transformation network causing training errors, for now 
+        # I am just training with the predicted parameters 'c'
+        #sb_hat = self.rigid_transform(sa, sb, mask1, mask2, c)
 
-        return sb_hat, c
+        return sb, c

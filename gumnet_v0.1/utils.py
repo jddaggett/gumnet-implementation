@@ -1,106 +1,10 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import math
-import matplotlib.pyplot as plt
 from scipy.ndimage import rotate, shift
-from torch.distributions import Normal
-
-def rotate_tensor(tensor, angle, axes, device):
-    """
-    Rotates a 5D tensor along the specified axes.
-    """
-    # Convert angle to radians
-    angle = torch.tensor(angle, device=device).float() * torch.pi / 180.0
-
-    # Create an identity affine transformation matrix
-    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
-
-    # Rotation around x-axis
-    if axes == (1, 2):
-        cos_angle = torch.cos(angle)
-        sin_angle = torch.sin(angle)
-        affine_matrix[:, 1, 1] = cos_angle
-        affine_matrix[:, 1, 2] = -sin_angle
-        affine_matrix[:, 2, 1] = sin_angle
-        affine_matrix[:, 2, 2] = cos_angle
-    # Rotation around y-axis
-    elif axes == (2, 3):
-        cos_angle = torch.cos(angle)
-        sin_angle = torch.sin(angle)
-        affine_matrix[:, 0, 0] = cos_angle
-        affine_matrix[:, 0, 2] = sin_angle
-        affine_matrix[:, 2, 0] = -sin_angle
-        affine_matrix[:, 2, 2] = cos_angle
-    # Rotation around z-axis
-    elif axes == (1, 3):
-        cos_angle = torch.cos(angle)
-        sin_angle = torch.sin(angle)
-        affine_matrix[:, 0, 0] = cos_angle
-        affine_matrix[:, 0, 1] = -sin_angle
-        affine_matrix[:, 1, 0] = sin_angle
-        affine_matrix[:, 1, 1] = cos_angle
-
-    # Apply affine transformation
-    affine_matrix = affine_matrix[:, :3, :]
-    grid = F.affine_grid(affine_matrix, tensor.size(), align_corners=False)
-    tensor = F.grid_sample(tensor, grid, align_corners=False)
-    return tensor
-
-def shift_tensor(tensor, shift, device):
-    """
-    Shifts a 5D tensor along the specified axes.
-    """
-    affine_matrix = torch.eye(4, device=device).unsqueeze(0).repeat(tensor.size(0), 1, 1)
-    affine_matrix[:, :3, 3] = torch.tensor(shift, device=device).float().unsqueeze(0)
-
-    grid = F.affine_grid(affine_matrix[:, :3, :], tensor.size(), align_corners=False)
-    tensor = F.grid_sample(tensor, grid, align_corners=False)
-    return tensor
-
-def augment_tensors(x, y, device):
-    """
-    Applies random rotations and translations to the data to prevent overfitting.
-
-    Parameters:
-    x (torch.Tensor): Input data for x.
-    y (torch.Tensor): Input data for y.
-
-    Returns:
-    tuple: Augmented x and y.
-    """
-    # Randomly rotate
-    angle_x = torch.FloatTensor(1).uniform_(-10, 10).item()
-    angle_y = torch.FloatTensor(1).uniform_(-10, 10).item()
-    angle_z = torch.FloatTensor(1).uniform_(-10, 10).item()
-    
-    x = rotate_tensor(x, angle_x, axes=(1, 2), device=device)
-    x = rotate_tensor(x, angle_y, axes=(2, 3), device=device)
-    x = rotate_tensor(x, angle_z, axes=(1, 3), device=device)
-    y = rotate_tensor(y, angle_x, axes=(1, 2), device=device)
-    y = rotate_tensor(y, angle_y, axes=(2, 3), device=device)
-    y = rotate_tensor(y, angle_z, axes=(1, 3), device=device)
-
-    # Randomly translate
-    translate_x = torch.FloatTensor(1).uniform_(-5, 5).item()
-    translate_y = torch.FloatTensor(1).uniform_(-5, 5).item()
-    translate_z = torch.FloatTensor(1).uniform_(-5, 5).item()
-    x = shift_tensor(x, (translate_x, translate_y, translate_z), device)
-    y = shift_tensor(y, (translate_x, translate_y, translate_z), device)
-
-    # Add random noise
-    noise_x = Normal(0, 0.01).sample(x.size()).to(device)
-    noise_y = Normal(0, 0.01).sample(y.size()).to(device)
-    x += noise_x
-    y += noise_y
-
-    return x, y
-
 
 # Data augmentation to prevent overfitting
-# Important to note that the same rigid transformations are applied
-# to both x and y, hence the ground truth difference remains the same
 def augment_data(x, y):
     """
     Applies random rotations and translations to the data to prevent overfitting.
@@ -130,11 +34,6 @@ def augment_data(x, y):
     x = shift(x, (0, translate_x, translate_y, translate_z, 0), order=1)
     y = shift(y, (0, translate_x, translate_y, translate_z, 0), order=1)
 
-    # Random noise
-    noise = np.random.normal(0, 0.01, x.shape)
-    x += noise
-    y += noise
-
     return x, y
 
 
@@ -158,74 +57,28 @@ def initialize_weights(module, name='He'):
             nn.init.constant_(module.bias, 0)
 
 
-def compute_transformation_accuracy(ground_truth, predicted):
-    assert predicted.size() == torch.Size([100, 6])
-    assert ground_truth.size() == torch.Size([100, 6])
-    
-    # Split the tensors into rotation and translation components
-    pred_rotation = predicted[:, :3]
-    pred_translation = predicted[:, 3:]
-    gt_rotation = ground_truth[:, :3]
-    gt_translation = ground_truth[:, 3:]
-
-    # Compute the mean squared error for rotation and translation
-    rotation_mse = F.mse_loss(pred_rotation, gt_rotation, reduction='mean')
-    translation_mse = F.mse_loss(pred_translation, gt_translation, reduction='mean')
-
-    return rotation_mse.item(), translation_mse.item()
-
 def correlation_coefficient_loss(y_true, y_pred):
-    y_true_mean = torch.mean(y_true, dim=[2, 3, 4], keepdim=True)
-    y_pred_mean = torch.mean(y_pred, dim=[2, 3, 4], keepdim=True)
-    y_true_centered = y_true - y_true_mean
-    y_pred_centered = y_pred - y_pred_mean
-
-    covariance = torch.sum(y_true_centered * y_pred_centered, dim=[2, 3, 4])
-    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=[2, 3, 4]))
-    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=[2, 3, 4]))
-
-    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
-    return 1 - correlation.mean()
-
-# For debugging purposes only with [batches, 6] shaped input
-def correlation_coefficient_loss_params(y_true, y_pred):
-    y_true_mean = torch.mean(y_true, dim=1, keepdim=True)
-    y_pred_mean = torch.mean(y_pred, dim=1, keepdim=True)
-    y_true_centered = y_true - y_true_mean
-    y_pred_centered = y_pred - y_pred_mean
-
-    covariance = torch.sum(y_true_centered * y_pred_centered, dim=1)
-    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2, dim=1))
-    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2, dim=1))
-
-    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
-    return 1 - correlation.mean()
-
-
-def alignment_eval_no_scale(y_true, y_pred, image_size):
     """
-    Evaluates the alignment of y_pred against y_true.
+    Computes the correlation coefficient loss between y_true and y_pred.
 
     Parameters:
-    y_true (numpy array): Ground truth transformation parameters.
-    y_pred (numpy array): Predicted transformation parameters.
-    image_size (int): The size of the image.
+    y_true (torch.Tensor): Ground truth tensor.
+    y_pred (torch.Tensor): Predicted tensor.
 
+    Returns:
+    torch.Tensor: The computed loss.
     """
-    ang_d = []
-    loc_d = []
+    y_true_mean = torch.mean(y_true)
+    y_pred_mean = torch.mean(y_pred)
+    y_true_centered = y_true - y_true_mean
+    y_pred_centered = y_pred - y_pred_mean
 
-    for i in range(len(y_true)):
-        a = angle_zyz_difference(ang1=y_true[i][:3],
-                                 ang2=y_pred[i][:3])
-        b = np.linalg.norm(
-            np.round(y_true[i][3:6]) -
-            np.round((y_pred[i][3:6])))
-        ang_d.append(a)
-        loc_d.append(b)
+    covariance = torch.sum(y_true_centered * y_pred_centered)
+    y_true_std = torch.sqrt(torch.sum(y_true_centered ** 2))
+    y_pred_std = torch.sqrt(torch.sum(y_pred_centered ** 2))
 
-    print('Rotation error: ', np.mean(ang_d), '+/-', np.std(ang_d),
-          'Translation error: ', np.mean(loc_d), '+/-', np.std(loc_d), '----------')
+    correlation = covariance / (y_true_std * y_pred_std + 1e-6)
+    return 1 - correlation.mean()
 
 
 def alignment_eval(y_true, y_pred, image_size):
@@ -338,66 +191,3 @@ def rotation_matrix_axis(dim, theta):
         raise ValueError("Invalid axis. Must be 0, 1, or 2.")
 
     return rm
-
-
-def visualize_2d_slice(y_true, y_pred):
-    """
-    Visualizes a 2D slice from the reference subtomogram data (y_true) and the corresponding aligned subtomogram data (y_pred).
-
-    Parameters:
-    y_true (torch.Tensor): Reference subtomogram data tensor with shape [100, 1, 32, 32, 32]
-    y_pred (torch.Tensor): Corresponding aligned subtomogram data tensor obtained from GumNet results with shape [100, 1, 32, 32, 32]
-    """
-    # Arbitrarily select the first sample in the batch
-    y_true_sample = y_true[0].squeeze().cpu().detach().numpy()
-    y_pred_sample = y_pred[0].squeeze().cpu().detach().numpy()
-
-    # Arbitrarily select middle 2D slice along depth dimension
-    slice_index = y_true_sample.shape[0] // 2
-    y_true_slice = y_true_sample[slice_index, :, :]
-    y_pred_slice = y_pred_sample[slice_index, :, :]
-
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.imshow(y_true_slice, cmap='gray')
-    plt.title('Ground Truth Slice')
-    plt.axis('off')
-    plt.subplot(1, 2, 2)
-    plt.imshow(y_pred_slice, cmap='gray')
-    plt.title('Predicted Slice')
-    plt.axis('off')
-
-    plt.show()
-
-
-# the below code loads subtomogram data as mrc files for 3D visualization with ChimeraX
-import mrcfile
-def save_as_mrc(tensor, filename):
-    """
-    Saves a tensor as an MRC file for 3D visualization.
-
-    Parameters:
-    tensor (numpy array): The tensor data.
-    filename (str): The filename to save the MRC file.
-
-    """
-    with mrcfile.new(filename, overwrite=True) as mrc:
-        mrc.set_data(tensor.astype(np.float32))
-
-def get_mrc_files(y_true, y_pred):
-    """
-    Generates MRC files for the ground truth and predicted subtomograms for 3D visualization.
-
-    Parameters:
-    y_true (torch.Tensor): Reference subtomogram data tensor.
-    y_pred (torch.Tensor): Corresponding aligned subtomogram data tensor.
-
-    """
-    try:
-        y_true_sample = y_true[0].squeeze().cpu().detach().numpy()
-        y_pred_sample = y_pred[0].squeeze().cpu().detach().numpy()
-        save_as_mrc(y_true_sample, 'y_true_sample.mrc')
-        save_as_mrc(y_pred_sample, 'y_pred_sample.mrc')
-        print('Generated 2 mrc files for visualization')
-    except Exception as e:
-        print('Error saving mrc files for visualization:', e)
